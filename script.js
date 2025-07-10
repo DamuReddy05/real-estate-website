@@ -1,5 +1,8 @@
-// Property data - load from localStorage or use sample data
-let properties = JSON.parse(localStorage.getItem('realEstateProperties')) || [
+// Property data - will be loaded from persistent storage
+let properties = [];
+
+// Sample data for initial setup (will be replaced by persistent storage)
+const sampleProperties = [
     {
         id: 1,
         title: "Luxury 3BHK Apartment",
@@ -12,7 +15,9 @@ let properties = JSON.parse(localStorage.getItem('realEstateProperties')) || [
         area: "1500 sq ft",
         image: "🏢",
         city: "Mumbai",
-        state: "Maharashtra"
+        state: "Maharashtra",
+        status: "active",
+        dateAdded: new Date().toISOString()
     },
     {
         id: 2,
@@ -26,7 +31,9 @@ let properties = JSON.parse(localStorage.getItem('realEstateProperties')) || [
         area: "1200 sq ft",
         image: "🏢",
         city: "Mumbai",
-        state: "Maharashtra"
+        state: "Maharashtra",
+        status: "active",
+        dateAdded: new Date().toISOString()
     },
     {
         id: 3,
@@ -40,7 +47,9 @@ let properties = JSON.parse(localStorage.getItem('realEstateProperties')) || [
         area: "800 sq ft",
         image: "🏢",
         city: "Mumbai",
-        state: "Maharashtra"
+        state: "Maharashtra",
+        status: "active",
+        dateAdded: new Date().toISOString()
     },
     {
         id: 4,
@@ -54,7 +63,9 @@ let properties = JSON.parse(localStorage.getItem('realEstateProperties')) || [
         area: "2000 sq ft",
         image: "🏞️",
         city: "Thane",
-        state: "Maharashtra"
+        state: "Maharashtra",
+        status: "active",
+        dateAdded: new Date().toISOString()
     },
     {
         id: 5,
@@ -68,7 +79,9 @@ let properties = JSON.parse(localStorage.getItem('realEstateProperties')) || [
         area: "3000 sq ft",
         image: "🏡",
         city: "Lonavala",
-        state: "Maharashtra"
+        state: "Maharashtra",
+        status: "active",
+        dateAdded: new Date().toISOString()
     },
     {
         id: 6,
@@ -82,7 +95,9 @@ let properties = JSON.parse(localStorage.getItem('realEstateProperties')) || [
         area: "500 sq ft",
         image: "🏢",
         city: "Mumbai",
-        state: "Maharashtra"
+        state: "Maharashtra",
+        status: "active",
+        dateAdded: new Date().toISOString()
     }
 ];
 
@@ -94,9 +109,41 @@ const searchInput = document.querySelector('.search-box input');
 const searchBtn = document.querySelector('.search-btn');
 const contactForm = document.querySelector('.contact-form');
 
-// Load properties
-function loadProperties(propertiesToShow = properties) {
+// Load properties from persistent storage
+async function loadProperties(propertiesToShow = null) {
+    try {
+        // Show loading state
+        propertyGrid.innerHTML = '<div style="text-align: center; padding: 2rem;"><div class="loading"></div><p>Loading properties...</p></div>';
+        
+        if (propertiesToShow) {
+            // Use provided properties (for search results)
+            displayProperties(propertiesToShow);
+        } else {
+            // Load from persistent storage
+            const activeProperties = await storageService.getActiveProperties();
+            if (activeProperties.length === 0) {
+                // If no properties in storage, use sample data
+                await storageService.saveProperties(sampleProperties);
+                displayProperties(sampleProperties);
+            } else {
+                displayProperties(activeProperties);
+            }
+        }
+    } catch (error) {
+        console.error('Error loading properties:', error);
+        // Fallback to sample data
+        displayProperties(sampleProperties);
+    }
+}
+
+// Display properties in the grid
+function displayProperties(propertiesToShow) {
     propertyGrid.innerHTML = '';
+    
+    if (propertiesToShow.length === 0) {
+        propertyGrid.innerHTML = '<div style="text-align: center; padding: 2rem; color: #64748b;">No properties found.</div>';
+        return;
+    }
     
     propertiesToShow.forEach(property => {
         const propertyCard = createPropertyCard(property);
@@ -137,34 +184,55 @@ function createPropertyCard(property) {
 }
 
 // Enhanced search functionality
-function searchProperties() {
+async function searchProperties() {
     const searchTerm = searchInput.value.toLowerCase();
     const propertyTypeFilter = document.querySelector('.search-filters select:first-child').value;
     const budgetFilter = document.querySelector('.search-filters select:last-child').value;
     
-    const filteredProperties = properties.filter(property => {
-        // Text search
-        const matchesSearch = property.title.toLowerCase().includes(searchTerm) ||
-                            property.location.toLowerCase().includes(searchTerm) ||
-                            property.city.toLowerCase().includes(searchTerm) ||
-                            property.type.toLowerCase().includes(searchTerm) ||
-                            property.category.toLowerCase().includes(searchTerm);
+    try {
+        // Build filters object
+        const filters = {};
         
-        // Property type filter
-        const matchesType = !propertyTypeFilter || 
-                           propertyTypeFilter === 'Property Type' ||
-                           property.category === propertyTypeFilter.toLowerCase() ||
-                           (propertyTypeFilter === 'Flats' && property.category === 'flat') ||
-                           (propertyTypeFilter === 'Plots' && property.category === 'plot') ||
-                           (propertyTypeFilter === 'Houses' && property.category === 'house');
+        if (propertyTypeFilter && propertyTypeFilter !== 'Property Type') {
+            if (propertyTypeFilter === 'Flats') filters.category = 'flat';
+            else if (propertyTypeFilter === 'Plots') filters.category = 'plot';
+            else if (propertyTypeFilter === 'Houses') filters.category = 'house';
+        }
         
-        // Budget filter (basic implementation)
-        const matchesBudget = !budgetFilter || budgetFilter === 'Budget';
+        if (budgetFilter && budgetFilter !== 'Budget') {
+            // Parse budget filter (you can enhance this)
+            if (budgetFilter === 'Under ₹50L') {
+                filters.maxPrice = 5000000;
+            } else if (budgetFilter === '₹50L - ₹1Cr') {
+                filters.minPrice = 5000000;
+                filters.maxPrice = 10000000;
+            } else if (budgetFilter === '₹1Cr - ₹2Cr') {
+                filters.minPrice = 10000000;
+                filters.maxPrice = 20000000;
+            } else if (budgetFilter === 'Above ₹2Cr') {
+                filters.minPrice = 20000000;
+            }
+        }
         
-        return matchesSearch && matchesType && matchesBudget;
-    });
-    
-    loadProperties(filteredProperties);
+        // Search using storage service
+        const searchResults = await storageService.searchProperties(searchTerm, filters);
+        displayProperties(searchResults);
+        
+    } catch (error) {
+        console.error('Error searching properties:', error);
+        // Fallback to local search
+        const activeProperties = await storageService.getActiveProperties();
+        const filteredProperties = activeProperties.filter(property => {
+            const matchesSearch = property.title.toLowerCase().includes(searchTerm) ||
+                                property.location.toLowerCase().includes(searchTerm) ||
+                                property.city.toLowerCase().includes(searchTerm) ||
+                                property.type.toLowerCase().includes(searchTerm) ||
+                                property.category.toLowerCase().includes(searchTerm);
+            
+            return matchesSearch;
+        });
+        displayProperties(filteredProperties);
+    }
 }
 
 // Mobile menu toggle
@@ -203,15 +271,9 @@ function handleContactForm(e) {
 }
 
 // Initialize the website
-function init() {
-    // Load properties from localStorage or use sample data
-    const storedProperties = JSON.parse(localStorage.getItem('realEstateProperties'));
-    if (storedProperties && storedProperties.length > 0) {
-        properties = storedProperties;
-    }
-    
-    // Load initial properties
-    loadProperties();
+async function init() {
+    // Load initial properties from persistent storage
+    await loadProperties();
     
     // Event listeners
     hamburger.addEventListener('click', toggleMobileMenu);
