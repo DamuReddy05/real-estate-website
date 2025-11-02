@@ -1,7 +1,7 @@
 // Admin Panel JavaScript
 
-// Property storage in localStorage
-let properties = JSON.parse(localStorage.getItem('realEstateProperties')) || [];
+// Property storage - will be loaded from persistent storage
+let properties = [];
 
 // DOM Elements
 const propertyUploadForm = document.getElementById('propertyUploadForm');
@@ -17,8 +17,8 @@ const forRentEl = document.getElementById('forRent');
 const plotsEl = document.getElementById('plots');
 
 // Initialize admin panel
-function initAdmin() {
-    loadProperties();
+async function initAdmin() {
+    await loadProperties();
     updateStats();
     setupEventListeners();
 }
@@ -35,7 +35,7 @@ function setupEventListeners() {
 }
 
 // Handle property upload
-function handlePropertyUpload(e) {
+async function handlePropertyUpload(e) {
     e.preventDefault();
     
     const formData = new FormData(e.target);
@@ -58,7 +58,8 @@ function handlePropertyUpload(e) {
         ownerPhone: formData.get('ownerPhone'),
         ownerEmail: formData.get('ownerEmail'),
         image: '🏢', // Default emoji, can be enhanced with file upload
-        dateAdded: new Date().toISOString()
+        dateAdded: new Date().toISOString(),
+        status: 'active' // Set as active by default
     };
     
     // Validate required fields
@@ -68,30 +69,36 @@ function handlePropertyUpload(e) {
         return;
     }
     
-    // Add property to storage
-    properties.push(propertyData);
-    saveProperties();
-    
-    // Update UI
-    loadProperties();
-    updateStats();
-    
-    // Show success message
-    showMessage('Property uploaded successfully!', 'success');
-    
-    // Reset form
-    e.target.reset();
+    try {
+        // Add property to persistent storage
+        await storageService.addProperty(propertyData);
+        
+        // Update UI
+        await loadProperties();
+        updateStats();
+        
+        // Show success message
+        showMessage('Property uploaded successfully!', 'success');
+        
+        // Reset form
+        e.target.reset();
+        
+    } catch (error) {
+        console.error('Error uploading property:', error);
+        showMessage('Error uploading property. Please try again.', 'error');
+    }
 }
 
-// Save properties to localStorage
-function saveProperties() {
-    localStorage.setItem('realEstateProperties', JSON.stringify(properties));
-}
-
-// Load properties from localStorage
-function loadProperties() {
-    properties = JSON.parse(localStorage.getItem('realEstateProperties')) || [];
-    displayProperties(properties);
+// Load properties from persistent storage
+async function loadProperties() {
+    try {
+        properties = await storageService.getProperties();
+        displayProperties(properties);
+    } catch (error) {
+        console.error('Error loading properties:', error);
+        properties = [];
+        displayProperties([]);
+    }
 }
 
 // Display properties in the admin panel
@@ -157,6 +164,14 @@ function createPropertyItem(property) {
             <button class="btn btn-primary" onclick="viewProperty(${property.id})">
                 <i class="fas fa-eye"></i> View
             </button>
+            ${property.status === 'active' ? 
+                `<button class="btn btn-outline" onclick="deactivateProperty(${property.id})" style="color: #f59e0b; border-color: #f59e0b;">
+                    <i class="fas fa-pause"></i> Deactivate
+                </button>` : 
+                `<button class="btn btn-outline" onclick="activateProperty(${property.id})" style="color: #059669; border-color: #059669;">
+                    <i class="fas fa-play"></i> Activate
+                </button>`
+            }
             <button class="btn btn-outline" onclick="deleteProperty(${property.id})" style="color: #dc2626; border-color: #dc2626;">
                 <i class="fas fa-trash"></i> Delete
             </button>
@@ -280,14 +295,49 @@ Property Details:
 }
 
 // Delete property
-function deleteProperty(id) {
+async function deleteProperty(id) {
     if (!confirm('Are you sure you want to delete this property?')) return;
     
-    properties = properties.filter(p => p.id !== id);
-    saveProperties();
-    loadProperties();
-    updateStats();
-    showMessage('Property deleted successfully!', 'success');
+    try {
+        await storageService.deleteProperty(id);
+        await loadProperties();
+        updateStats();
+        showMessage('Property deleted successfully!', 'success');
+    } catch (error) {
+        console.error('Error deleting property:', error);
+        showMessage('Error deleting property. Please try again.', 'error');
+    }
+}
+
+// Deactivate property
+async function deactivateProperty(id) {
+    if (!confirm('Are you sure you want to deactivate this property? It will not be visible to users.')) return;
+    
+    try {
+        await storageService.deactivateProperty(id);
+        await loadProperties();
+        updateStats();
+        showMessage('Property deactivated successfully!', 'success');
+    } catch (error) {
+        console.error('Error deactivating property:', error);
+        showMessage('Error deactivating property. Please try again.', 'error');
+    }
+}
+
+// Activate property
+async function activateProperty(id) {
+    try {
+        await storageService.updateProperty(id, { 
+            status: 'active',
+            activatedAt: new Date().toISOString()
+        });
+        await loadProperties();
+        updateStats();
+        showMessage('Property activated successfully!', 'success');
+    } catch (error) {
+        console.error('Error activating property:', error);
+        showMessage('Error activating property. Please try again.', 'error');
+    }
 }
 
 // Logout function

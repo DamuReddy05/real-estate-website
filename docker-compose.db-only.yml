@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database Only
+  db:
+    image: postgres:15-alpine
+    container_name: realestate_db
+    environment:
+      POSTGRES_DB: realestatehub
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - realestate_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  realestate_network:
+    driver: bridge
+
+
