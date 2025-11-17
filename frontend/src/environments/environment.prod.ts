@@ -1,6 +1,6 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://api.realestatehub.space/api',
+  apiUrl: 'https://www.realestatehub.space/api',
   auth0: {
     domain: 'dev-u6a8c25vfy8hd6vx.us.auth0.com',
     clientId: 'iElRqTfPc3mrwIGhlgaIceFhT7G86tuN',
