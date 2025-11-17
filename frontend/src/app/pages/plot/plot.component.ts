@@ -299,7 +299,7 @@ import { NgxSpinnerService } from 'ngx-spinner';
           <div class="plot-card" *ngFor="let property of filteredProperties">
             <div class="plot-visual" (click)="viewProperty(property.id)">
               <div class="plot-icon">🗺️</div>
-              <div class="plot-size">{{ property.area }} sq ft</div>
+              <div class="plot-size">{{ property.carpet_area }} sq ft</div>
               <button class="save-btn" (click)="toggleFavorite(property.id, $event)">
                 <i class="fas fa-bookmark" [class.saved]="isFavorite(property.id)"></i>
               </button>
@@ -316,24 +316,24 @@ import { NgxSpinnerService } from 'ngx-spinner';
                   <i class="fas fa-vector-square"></i>
                   <div>
                     <span class="spec-label">Total Area</span>
-                    <span class="spec-value">{{ property.area }} sq ft</span>
+                    <span class="spec-value">{{ property.carpet_area }} sq ft</span>
                   </div>
                 </div>
                 <div class="spec-item">
                   <i class="fas fa-ruler-horizontal"></i>
                   <div>
                     <span class="spec-label">Approx. Acres</span>
-                    <span class="spec-value">{{ (property.area / 43560) | number:'1.2-2' }}</span>
+                    <span class="spec-value">{{ (property.carpet_area / 43560) | number:'1.2-2' }}</span>
                   </div>
                 </div>
               </div>
               <div class="plot-highlights" *ngIf="property.amenities">
-                <span class="highlight" *ngFor="let amenity of property.amenities.split(',').slice(0, 3)">
-                  <i class="fas fa-check"></i> {{ amenity.trim() }}
+                <span class="highlight" *ngFor="let amenity of (property.amenities || []).slice(0, 3)">
+                  <i class="fas fa-check"></i> {{ amenity.name }}
                 </span>
               </div>
               <div class="plot-pricing">
-                <div class="price-main">{{ property.price }}</div>
+                <div class="price-main">₹{{ formatPrice(property.price) }}</div>
                 <div class="price-per-sqft">₹{{ getPricePerSqFt(property) }}/sq ft</div>
               </div>
               <div class="plot-actions">
@@ -448,7 +448,7 @@ import { NgxSpinnerService } from 'ngx-spinner';
             <div class="plot-header">
               <div class="plot-visual-large" (click)="viewProperty(property.id)">
                 <div class="plot-shape">
-                  <div class="dimension">{{ property.area }} sq ft</div>
+                  <div class="dimension">{{ property.carpet_area }} sq ft</div>
                   <div class="plot-type-badge">{{ getPlotUsage(property) }}</div>
                 </div>
               </div>
@@ -469,8 +469,8 @@ import { NgxSpinnerService } from 'ngx-spinner';
                   <i class="fas fa-chart-area"></i>
                   <div>
                     <span class="meas-label">Plot Area</span>
-                    <span class="meas-value">{{ property.area }} sq ft</span>
-                    <small>({{ (property.area / 43560) | number:'1.3-3' }} acres)</small>
+                    <span class="meas-value">{{ property.carpet_area }} sq ft</span>
+                    <small>({{ (property.carpet_area / 43560) | number:'1.3-3' }} acres)</small>
                   </div>
                 </div>
                 <div class="measurement">
@@ -484,15 +484,15 @@ import { NgxSpinnerService } from 'ngx-spinner';
               <div class="plot-features" *ngIf="property.amenities">
                 <h4>Plot Features:</h4>
                 <div class="features-list">
-                  <span class="feature-tag" *ngFor="let feature of property.amenities.split(',').slice(0, 4)">
-                    <i class="fas fa-check-circle"></i> {{ feature.trim() }}
+                  <span class="feature-tag" *ngFor="let feature of (property.amenities || []).slice(0, 4)">
+                    <i class="fas fa-check-circle"></i> {{ feature.name }}
                   </span>
                 </div>
               </div>
               <div class="plot-price-section">
                 <div class="price-display">
                   <span class="price-label">Total Price</span>
-                  <span class="price-value">{{ property.price }}</span>
+                  <span class="price-value">₹{{ formatPrice(property.price) }}</span>
                 </div>
                 <div class="plot-cta">
                   <button class="btn btn-primary" (click)="viewProperty(property.id)">
@@ -1835,8 +1835,9 @@ export class PlotComponent implements OnInit {
   loadProperties() {
     this.loading = true;
     this.propertyService.getProperties(this.searchFilters).subscribe({
-      next: (properties) => {
-        this.properties = properties.filter(p => p.category === 'plot');
+      next: (response) => {
+        const list = response?.results ?? [];
+        this.properties = list.filter((p: Property) => p.category === 'plot');
         this.totalProperties = this.properties.length;
         this.filteredProperties = [...this.properties];
         this.sortProperties();
@@ -1881,18 +1882,20 @@ export class PlotComponent implements OnInit {
       case 'price-low':
       case 'price-high':
         this.filteredProperties.sort((a, b) => {
-          const priceA = this.extractPrice(a.price);
-          const priceB = this.extractPrice(b.price);
+          const priceA = typeof a.price === 'number' ? a.price : this.extractPrice(String(a.price));
+          const priceB = typeof b.price === 'number' ? b.price : this.extractPrice(String(b.price));
           return this.sortBy === 'price-low' ? priceA - priceB : priceB - priceA;
         });
         break;
       case 'area-large':
-        this.filteredProperties.sort((a, b) => b.area - a.area);
+        this.filteredProperties.sort((a, b) => b.carpet_area - a.carpet_area);
         break;
       case 'best-value':
         this.filteredProperties.sort((a, b) => {
-          const valueA = this.extractPrice(a.price) / a.area;
-          const valueB = this.extractPrice(b.price) / b.area;
+          const priceA = typeof a.price === 'number' ? a.price : this.extractPrice(String(a.price));
+          const priceB = typeof b.price === 'number' ? b.price : this.extractPrice(String(b.price));
+          const valueA = priceA / a.carpet_area;
+          const valueB = priceB / b.carpet_area;
           return valueA - valueB;
         });
         break;
@@ -1950,21 +1953,23 @@ export class PlotComponent implements OnInit {
   }
 
   getPlotCategory(property: Property): string {
-    if (property.amenities?.toLowerCase().includes('commercial')) return 'Commercial Plot';
-    if (property.amenities?.toLowerCase().includes('residential')) return 'Residential Plot';
+    const amenityNames = property.amenities?.map(a => a.name.toLowerCase()).join(' ') || '';
+    if (amenityNames.includes('commercial')) return 'Commercial Plot';
+    if (amenityNames.includes('residential')) return 'Residential Plot';
     return 'Plot for Sale';
   }
 
   getPlotUsage(property: Property): string {
-    if (property.amenities?.toLowerCase().includes('commercial')) return 'Commercial Use';
-    if (property.amenities?.toLowerCase().includes('residential')) return 'Residential Use';
+    const amenityNames = property.amenities?.map(a => a.name.toLowerCase()).join(' ') || '';
+    if (amenityNames.includes('commercial')) return 'Commercial Use';
+    if (amenityNames.includes('residential')) return 'Residential Use';
     return 'Multi-Purpose';
   }
 
   getPricePerSqFt(property: Property): string {
-    const price = this.extractPrice(property.price);
-    if (price > 0 && property.area > 0) {
-      return (price / property.area).toFixed(0);
+    const price = typeof property.price === 'number' ? property.price : this.extractPrice(String(property.price));
+    if (price > 0 && property.carpet_area > 0) {
+      return (price / property.carpet_area).toFixed(0);
     }
     return 'N/A';
   }
@@ -2020,6 +2025,17 @@ export class PlotComponent implements OnInit {
     const element = document.querySelector('.investment-section');
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  formatPrice(price: number): string {
+    if (!price || price === 0) return '0';
+    if (price >= 10000000) {
+      return `${(price / 10000000).toFixed(2)} Cr`;
+    } else if (price >= 100000) {
+      return `${(price / 100000).toFixed(2)} L`;
+    } else {
+      return price.toLocaleString('en-IN');
     }
   }
 }

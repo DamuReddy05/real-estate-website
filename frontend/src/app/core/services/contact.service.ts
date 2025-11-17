@@ -5,7 +5,9 @@ import { ApiService } from './api.service';
 import { 
   ContactMessage, 
   CreateContactMessageRequest, 
-  ContactStats 
+  ContactStats,
+  SiteSettings,
+  SiteSettingsUpdate
 } from '../models/contact.model';
 
 @Injectable({
@@ -58,6 +60,21 @@ export class ContactService {
   // Admin: Get contact statistics
   getContactStats(): Observable<ContactStats> {
     return this.apiService.get<ContactStats>('/contact/admin/stats/');
+  }
+
+  // Public: Get site settings
+  getSiteSettings(): Observable<SiteSettings> {
+    return this.apiService.get<SiteSettings>('/contact/settings/');
+  }
+
+  // Admin: Get site settings (with metadata)
+  getAdminSiteSettings(): Observable<SiteSettings> {
+    return this.apiService.get<SiteSettings>('/contact/admin/settings/');
+  }
+
+  // Admin: Update site settings
+  updateSiteSettings(settings: SiteSettingsUpdate): Observable<SiteSettings> {
+    return this.apiService.put<SiteSettings>('/contact/admin/settings/', settings);
   }
 
   // Helper methods

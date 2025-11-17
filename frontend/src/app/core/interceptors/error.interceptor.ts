@@ -48,8 +48,10 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         }
       }
 
-      // Show error toast
-      toastr.error(errorMessage, 'Error');
+      // Suppress global toast for phone capture flow
+      if (!(error.error && (error.error.code === 'phone_required' || error.error.code === 'phone_required_admin'))) {
+        toastr.error(errorMessage, 'Error');
+      }
 
       return throwError(() => error);
     })

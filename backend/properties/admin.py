@@ -1,5 +1,15 @@
 from django.contrib import admin
-from .models import Property, PropertyImage, City, Pincode
+from .models import (
+    Property,
+    PropertyImage,
+    City,
+    Pincode,
+    PropertyEnquiry,
+    Tag,
+    Category,
+    SubCategory,
+    Amenity,
+)
 
 
 class PropertyImageInline(admin.TabularInline):
@@ -10,15 +20,16 @@ class PropertyImageInline(admin.TabularInline):
 
 @admin.register(Property)
 class PropertyAdmin(admin.ModelAdmin):
-    list_display = ['title', 'category', 'type', 'price', 'location', 'city', 'status', 'created_at']
-    list_filter = ['category', 'type', 'status', 'city', 'state', 'created_at']
+    list_display = ['title', 'category', 'subcategory', 'type', 'price', 'location', 'city', 'status', 'is_phone_approved', 'created_at']
+    list_filter = ['category', 'subcategory', 'type', 'status', 'city', 'state', 'is_phone_approved', 'created_at', 'tags']
     search_fields = ['title', 'location', 'city', 'description', 'owner_name', 'owner_phone']
-    list_editable = ['status']
+    list_editable = ['status', 'is_phone_approved']
     readonly_fields = ['created_at', 'updated_at']
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('title', 'category', 'type', 'price', 'location', 'area')
+            'fields': ('title', 'category', 'subcategory', 'type', 'price', 'location', 
+                      'carpet_area', 'buildup_area', 'length', 'width', 'height')
         }),
         ('Property Details', {
             'fields': ('bedrooms', 'bathrooms', 'city', 'state', 'pincode')
@@ -27,7 +38,11 @@ class PropertyAdmin(admin.ModelAdmin):
             'fields': ('description', 'amenities')
         }),
         ('Owner Information', {
-            'fields': ('owner_name', 'owner_phone', 'owner_email')
+            'fields': ('owner_name', 'owner_phone', 'owner_email', 'is_phone_approved')
+        }),
+        ('Tags', {
+            'fields': ('tags',),
+            'classes': ('collapse',)
         }),
         ('System Information', {
             'fields': ('status', 'created_by', 'created_at', 'updated_at'),
@@ -86,3 +101,46 @@ class CityAdmin(admin.ModelAdmin):
         """Count properties in this city"""
         return Property.objects.filter(city=obj.name).count()
     property_count.short_description = 'Properties'
+
+
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
+    list_display = ['name', 'slug', 'is_active', 'updated_at']
+    list_filter = ['is_active']
+    search_fields = ['name', 'slug']
+    prepopulated_fields = {'slug': ('name',)}
+
+
+@admin.register(Category)
+class CategoryAdmin(admin.ModelAdmin):
+    list_display = ['name', 'priority', 'is_active', 'updated_at']
+    list_filter = ['is_active']
+    search_fields = ['name', 'slug']
+    prepopulated_fields = {'slug': ('name',)}
+    ordering = ['priority', 'name']
+
+
+@admin.register(SubCategory)
+class SubCategoryAdmin(admin.ModelAdmin):
+    list_display = ['name', 'category', 'priority', 'is_active', 'updated_at']
+    list_filter = ['category', 'is_active']
+    search_fields = ['name', 'slug', 'category__name']
+    prepopulated_fields = {'slug': ('name',)}
+    ordering = ['category', 'priority', 'name']
+
+
+@admin.register(Amenity)
+class AmenityAdmin(admin.ModelAdmin):
+    list_display = ['name', 'slug', 'icon', 'priority', 'is_active', 'updated_at']
+    list_filter = ['is_active']
+    search_fields = ['name', 'slug', 'description']
+    prepopulated_fields = {'slug': ('name',)}
+    ordering = ['priority', 'name']
+
+
+@admin.register(PropertyEnquiry)
+class PropertyEnquiryAdmin(admin.ModelAdmin):
+    list_display = ['property', 'name', 'phone', 'status', 'created_at']
+    list_filter = ['status', 'created_at']
+    search_fields = ['property__title', 'name', 'email', 'phone', 'message']
+    readonly_fields = ['created_at', 'updated_at']

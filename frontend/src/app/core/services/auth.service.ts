@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, tap } from 'rxjs';
 import { ApiService } from './api.service';
-import { User, LoginRequest, LoginResponse, ChangePasswordRequest } from '../models/user.model';
+import { User, LoginRequest, LoginResponse, ChangePasswordRequest, GoogleLoginRequest } from '../models/user.model';
 
 @Injectable({
   providedIn: 'root'
@@ -17,6 +17,16 @@ export class AuthService {
   // Login
   login(credentials: LoginRequest): Observable<LoginResponse> {
     return this.apiService.post<LoginResponse>('/auth/login/', credentials)
+      .pipe(
+        tap(response => {
+          this.setTokens(response.access, response.refresh);
+          this.setCurrentUser(response.user);
+        })
+      );
+  }
+
+  loginWithGoogle(payload: GoogleLoginRequest): Observable<LoginResponse> {
+    return this.apiService.post<LoginResponse>('/auth/google-login/', payload)
       .pipe(
         tap(response => {
           this.setTokens(response.access, response.refresh);
@@ -74,10 +84,6 @@ export class AuthService {
 
   // Set tokens
   private setTokens(accessToken: string, refreshToken: string): void {
-    console.log('Storing tokens:', {
-      access: accessToken.substring(0, 20) + '...',
-      refresh: refreshToken.substring(0, 20) + '...'
-    });
     localStorage.setItem('access_token', accessToken);
     localStorage.setItem('refresh_token', refreshToken);
   }
@@ -128,5 +134,10 @@ export class AuthService {
   // Get current user value
   getCurrentUserValue(): User | null {
     return this.currentUserSubject.value;
+  }
+
+  // Force clear session (used when logout API fails)
+  clearSession(): void {
+    this.clearAuthData();
   }
 }

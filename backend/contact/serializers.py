@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ContactMessage
+from .models import ContactMessage, SiteSettings
 
 
 class ContactMessageSerializer(serializers.ModelSerializer):
@@ -32,3 +32,27 @@ class ContactMessageCreateSerializer(serializers.ModelSerializer):
         if len(value) < 10:
             raise serializers.ValidationError("Phone number must be at least 10 digits")
         return value
+
+
+class SiteSettingsSerializer(serializers.ModelSerializer):
+    """Serializer for site settings (public read-only)"""
+    
+    class Meta:
+        model = SiteSettings
+        fields = [
+            'contact_address', 'contact_phone', 'contact_email', 'working_hours',
+            'facebook_url', 'twitter_url', 'instagram_url', 'linkedin_url'
+        ]
+
+
+class SiteSettingsAdminSerializer(serializers.ModelSerializer):
+    """Serializer for site settings (admin read-write)"""
+    
+    class Meta:
+        model = SiteSettings
+        fields = [
+            'id', 'contact_address', 'contact_phone', 'contact_email', 'working_hours',
+            'facebook_url', 'twitter_url', 'instagram_url', 'linkedin_url',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']

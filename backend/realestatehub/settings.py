@@ -5,6 +5,10 @@ Django settings for realestatehub project.
 from pathlib import Path
 from decouple import config
 import os
+import certifi
+
+os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -16,6 +20,13 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-this-in-produc
 DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,0.0.0.0,backend').split(',')
+
+# Auth0 / Social Login
+AUTH0_DOMAIN = config('AUTH0_DOMAIN', default='dev-u6a8c25vfy8hd6vx.us.auth0.com')
+AUTH0_AUDIENCE = config('AUTH0_AUDIENCE', default='https://www.realestatehub.space')
+AUTH0_CLIENT_ID = config('AUTH0_CLIENT_ID', default='iElRqTfPc3mrwIGhlgaIceFhT7G86tuN')
+AUTH0_CLIENT_SECRET = config('AUTH0_CLIENT_SECRET', default='woLZh7JM-Ty8R3tDsA7T6jzMK6Bq9o2wbeRRKCHj4cKLPuCrMJ17mm1cfcaGTZ6p')
+AUTH0_CONNECTION = config('AUTH0_CONNECTION', default='google-oauth2')
 
 # Application definition
 INSTALLED_APPS = [

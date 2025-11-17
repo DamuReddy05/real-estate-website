@@ -68,6 +68,36 @@ import { ToastrService } from 'ngx-toastr';
             <span class="badge badge-new" *ngIf="!isSidebarCollapsed && newMessageCount > 0">{{ newMessageCount }}</span>
           </a>
 
+          <a 
+            routerLink="/admin/taxonomy" 
+            routerLinkActive="active"
+            class="nav-item"
+            [title]="isSidebarCollapsed ? 'Tags & Categories' : ''"
+          >
+            <i class="fas fa-tags"></i>
+            <span *ngIf="!isSidebarCollapsed">Tags & Categories</span>
+          </a>
+
+          <a 
+            routerLink="/admin/locations" 
+            routerLinkActive="active"
+            class="nav-item"
+            [title]="isSidebarCollapsed ? 'Cities & Pincodes' : ''"
+          >
+            <i class="fas fa-map-marker-alt"></i>
+            <span *ngIf="!isSidebarCollapsed">Cities & Pincodes</span>
+          </a>
+
+          <a 
+            routerLink="/admin/settings" 
+            routerLinkActive="active"
+            class="nav-item"
+            [title]="isSidebarCollapsed ? 'Site Settings' : ''"
+          >
+            <i class="fas fa-cog"></i>
+            <span *ngIf="!isSidebarCollapsed">Site Settings</span>
+          </a>
+
           <div class="nav-divider" *ngIf="!isSidebarCollapsed"></div>
 
           <a 
@@ -520,6 +550,9 @@ export class AdminLayoutComponent implements OnInit {
     if (url.includes('/properties/edit')) return 'Edit Property';
     if (url.includes('/properties')) return 'Properties';
     if (url.includes('/messages') || url.includes('/contact')) return 'Contact Messages';
+    if (url.includes('/taxonomy')) return 'Tags & Categories';
+    if (url.includes('/locations')) return 'Cities & Pincodes';
+    if (url.includes('/settings')) return 'Site Settings';
     return 'Admin Panel';
   }
 
@@ -530,6 +563,9 @@ export class AdminLayoutComponent implements OnInit {
     if (url.includes('/properties/edit')) return 'fas fa-edit';
     if (url.includes('/properties')) return 'fas fa-home';
     if (url.includes('/messages') || url.includes('/contact')) return 'fas fa-envelope';
+    if (url.includes('/taxonomy')) return 'fas fa-tags';
+    if (url.includes('/locations')) return 'fas fa-map-marker-alt';
+    if (url.includes('/settings')) return 'fas fa-cog';
     return 'fas fa-cog';
   }
 
@@ -541,5 +577,7 @@ export class AdminLayoutComponent implements OnInit {
     }
   }
 }
+
+
 
 

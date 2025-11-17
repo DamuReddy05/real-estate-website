@@ -39,6 +39,18 @@ export const adminRoutes: Routes = [
       {
         path: 'messages',
         loadComponent: () => import('./messages/messages.component').then(m => m.AdminMessagesComponent)
+      },
+      {
+        path: 'taxonomy',
+        loadComponent: () => import('./taxonomy/taxonomy.component').then(m => m.TaxonomyComponent)
+      },
+      {
+        path: 'locations',
+        loadComponent: () => import('./locations/location-manager.component').then(m => m.LocationManagerComponent)
+      },
+      {
+        path: 'settings',
+        loadComponent: () => import('./settings/site-settings.component').then(m => m.SiteSettingsComponent)
       }
     ]
   }

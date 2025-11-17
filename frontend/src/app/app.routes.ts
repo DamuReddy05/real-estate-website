@@ -30,6 +30,30 @@ export const routes: Routes = [
     loadChildren: () => import('./admin/admin.routes').then(m => m.adminRoutes)
   },
   {
+    path: 'login',
+    loadComponent: () => import('./pages/auth/customer-login/customer-login.component').then(m => m.CustomerLoginComponent)
+  },
+  {
+    path: 'auth/callback',
+    loadComponent: () => import('./pages/auth/auth-callback/auth-callback.component').then(m => m.AuthCallbackComponent)
+  },
+  {
+    path: 'auth/phone',
+    loadComponent: () => import('./pages/auth/phone-verification/phone-verification.component').then(m => m.PhoneVerificationComponent)
+  },
+  {
+    path: 'customer/properties',
+    loadComponent: () => import('./pages/customer/manage-properties/manage-properties.component').then(m => m.ManagePropertiesComponent)
+  },
+  {
+    path: 'customer/properties/create',
+    loadComponent: () => import('./pages/customer/property-form/customer-property-form.component').then(m => m.CustomerPropertyFormComponent)
+  },
+  {
+    path: 'customer/properties/edit/:id',
+    loadComponent: () => import('./pages/customer/property-form/customer-property-form.component').then(m => m.CustomerPropertyFormComponent)
+  },
+  {
     path: '**',
     redirectTo: ''
   }

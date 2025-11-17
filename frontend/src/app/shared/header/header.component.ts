@@ -1,9 +1,13 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { LocationService } from '../../core/services/location.service';
 import { PropertyService } from '../../core/services/property.service';
+import { AuthService } from '../../core/services/auth.service';
+import { User } from '../../core/models/user.model';
+import { CityOption } from '../../core/models/property.model';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-header',
@@ -42,12 +46,12 @@ import { PropertyService } from '../../core/services/property.service';
               <div 
                 class="city-item" 
                 *ngFor="let city of filteredCities"
-                (click)="selectCity(city.city)"
-                [class.selected]="city.city === selectedCity"
+                (click)="selectCity(city.name)"
+                [class.selected]="city.name === selectedCity"
               >
                 <i class="fas fa-map-marker-alt"></i>
-                <span class="city-name">{{ city.city }}</span>
-                <span class="property-count">{{ city.count }} properties</span>
+                <span class="city-name">{{ city.name }}</span>
+                <span class="property-count">{{ city.property_count || 0 }} properties</span>
               </div>
               <div class="no-results" *ngIf="filteredCities.length === 0">
                 <i class="fas fa-search"></i>
@@ -68,9 +72,23 @@ import { PropertyService } from '../../core/services/property.service';
           <li><a routerLink="/contact" routerLinkActive="active">Contact</a></li>
         </ul>
         <div class="nav-actions">
-          <button class="btn-admin" routerLink="/admin/login">
-            <i class="fas fa-user-shield"></i> Admin
-          </button>
+          <ng-container *ngIf="!isAuthenticated; else authenticatedActions">
+            <button class="btn-login" (click)="navigateToLogin()">
+              <i class="fas fa-user"></i> Login
+            </button>
+            <button class="btn-admin" routerLink="/admin/login">
+              <i class="fas fa-user-shield"></i> Admin
+            </button>
+          </ng-container>
+          <ng-template #authenticatedActions>
+            <button class="btn-manage" *ngIf="currentUser?.role === 'customer'" (click)="manageProperties()">
+              <i class="fas fa-briefcase"></i> Manage Properties
+            </button>
+            <button class="btn-logout" (click)="logout()" [disabled]="isLoggingOut">
+              <i class="fas fa-sign-out-alt"></i>
+              {{ isLoggingOut ? 'Logging out...' : 'Logout' }}
+            </button>
+          </ng-template>
         </div>
       </div>
     </nav>
@@ -329,6 +347,9 @@ import { PropertyService } from '../../core/services/property.service';
 
     .nav-actions {
       flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
     }
 
     .nav-links a {
@@ -343,19 +364,63 @@ import { PropertyService } from '../../core/services/property.service';
       color: #3b82f6;
     }
 
-    .btn-admin {
-      padding: 0.5rem 1.5rem;
-      background: #3b82f6;
-      color: white;
-      border: none;
-      border-radius: 8px;
+    .btn-login,
+    .btn-admin,
+    .btn-manage,
+    .btn-logout {
+      padding: 0.45rem 1.3rem;
+      border-radius: 999px;
+      border: 1px solid transparent;
       cursor: pointer;
-      font-weight: 500;
-      transition: background 0.3s;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s ease;
+      background: transparent;
+    }
+
+    .btn-login {
+      border-color: #d0d7f0;
+      color: #0f172a;
+    }
+
+    .btn-login:hover {
+      border-color: #2563eb;
+      color: #2563eb;
+    }
+
+    .btn-admin {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      box-shadow: 0 10px 15px rgba(37, 99, 235, 0.2);
     }
 
     .btn-admin:hover {
       background: #2563eb;
+    }
+
+    .btn-manage {
+      background: #0ea5e9;
+      color: white;
+      border: none;
+      box-shadow: 0 10px 15px rgba(14, 165, 233, 0.2);
+    }
+
+    .btn-manage:hover {
+      background: #0284c7;
+    }
+
+    .btn-logout {
+      border-color: #fecdd3;
+      color: #be123c;
+      background: #fff1f2;
+    }
+
+    .btn-logout:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
     }
 
     /* Responsive */
@@ -412,24 +477,30 @@ import { PropertyService } from '../../core/services/property.service';
         font-size: 0.85rem;
       }
 
+      .btn-login,
       .btn-admin {
-        padding: 0.4rem 1rem;
-        font-size: 0.85rem;
+        padding: 0.4rem 0.9rem;
+        font-size: 0.8rem;
       }
     }
   `]
 })
-export class HeaderComponent implements OnInit {
-  cities: { city: string; count: number }[] = [];
-  filteredCities: { city: string; count: number }[] = [];
-  selectedCity: string = 'Hyderabad';
+export class HeaderComponent implements OnInit, OnDestroy {
+  cities: CityOption[] = [];
+  filteredCities: CityOption[] = [];
+  selectedCity: string = 'Ananthapur';
   citySearch: string = '';
   isLocationDropdownOpen: boolean = false;
+  currentUser: User | null = null;
+  isAuthenticated = false;
+  isLoggingOut = false;
+  private subscriptions = new Subscription();
 
   constructor(
     private router: Router,
     private locationService: LocationService,
-    private propertyService: PropertyService
+    private propertyService: PropertyService,
+    private authService: AuthService
   ) {
     // Close dropdown when clicking outside
     if (typeof document !== 'undefined') {
@@ -451,19 +522,35 @@ export class HeaderComponent implements OnInit {
       next: (cities) => {
         this.cities = cities;
         this.filteredCities = cities;
+        if (cities.length && !cities.find(c => c.name === this.selectedCity)) {
+          this.selectCity(cities[0].name);
+        }
       },
       error: (error) => {
         console.error('Error loading cities:', error);
         // Fallback to default city
-        this.cities = [{ city: 'Hyderabad', count: 0 }];
+        this.cities = [{ id: -1, name: 'Ananthapur', state: 'Andhra Pradesh', is_active: true, property_count: 0, pincodes: [] }];
         this.filteredCities = this.cities;
       }
     });
 
     // Subscribe to location changes
-    this.locationService.selectedCity$.subscribe(city => {
-      this.selectedCity = city;
-    });
+    this.subscriptions.add(
+      this.locationService.selectedCity$.subscribe(city => {
+        this.selectedCity = city;
+      })
+    );
+
+    this.subscriptions.add(
+      this.authService.currentUser$.subscribe(user => {
+        this.currentUser = user;
+        this.isAuthenticated = !!user;
+      })
+    );
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.unsubscribe();
   }
 
   toggleLocationDropdown() {
@@ -482,7 +569,7 @@ export class HeaderComponent implements OnInit {
     
     const search = this.citySearch.toLowerCase();
     this.filteredCities = this.cities.filter(city => 
-      city.city.toLowerCase().includes(search)
+      city.name.toLowerCase().includes(search)
     );
   }
 
@@ -508,19 +595,19 @@ export class HeaderComponent implements OnInit {
         
         // Check if detected city is in our list
         const cityExists = this.cities.find(c => 
-          c.city.toLowerCase() === detectedCity.toLowerCase()
+          c.name.toLowerCase() === detectedCity.toLowerCase()
         );
         
         if (cityExists) {
-          this.selectCity(cityExists.city);
+          this.selectCity(cityExists.name);
         } else {
           // If detected city not in list, check for major nearby cities
           const indianCities = ['Hyderabad', 'Bangalore', 'Mumbai', 'Delhi', 'Chennai', 'Pune'];
           const nearbyCity = this.cities.find(c => 
-            indianCities.includes(c.city)
+            indianCities.includes(c.name)
           );
           if (nearbyCity) {
-            this.selectCity(nearbyCity.city);
+            this.selectCity(nearbyCity.name);
           }
         }
       })
@@ -543,6 +630,33 @@ export class HeaderComponent implements OnInit {
 
   scrollToTop() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  navigateToLogin(): void {
+    this.router.navigate(['/login']);
+  }
+
+  manageProperties(): void {
+    this.router.navigate(['/customer/properties']);
+  }
+
+  logout(): void {
+    if (this.isLoggingOut) {
+      return;
+    }
+    this.isLoggingOut = true;
+    this.authService.logout().subscribe({
+      next: () => this.handlePostLogout(),
+      error: () => {
+        this.authService.clearSession();
+        this.handlePostLogout();
+      }
+    });
+  }
+
+  private handlePostLogout(): void {
+    this.isLoggingOut = false;
+    this.router.navigate(['/']);
   }
 }
 

@@ -4,8 +4,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters import rest_framework as filters
-from .models import ContactMessage
-from .serializers import ContactMessageSerializer, ContactMessageCreateSerializer
+from .models import ContactMessage, SiteSettings
+from .serializers import (
+    ContactMessageSerializer, ContactMessageCreateSerializer,
+    SiteSettingsSerializer, SiteSettingsAdminSerializer
+)
 
 
 class ContactMessageCreateView(generics.CreateAPIView):
@@ -57,3 +60,29 @@ def contact_stats(request):
         'closed_messages': ContactMessage.objects.filter(status='closed').count(),
     }
     return Response(stats)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_site_settings(request):
+    """Get site settings (public endpoint)"""
+    settings = SiteSettings.load()
+    serializer = SiteSettingsSerializer(settings)
+    return Response(serializer.data)
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([IsAuthenticated])
+def admin_site_settings(request):
+    """Get or update site settings (admin only)"""
+    settings = SiteSettings.load()
+    
+    if request.method == 'GET':
+        serializer = SiteSettingsAdminSerializer(settings)
+        return Response(serializer.data)
+    
+    elif request.method == 'PUT':
+        serializer = SiteSettingsAdminSerializer(settings, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)

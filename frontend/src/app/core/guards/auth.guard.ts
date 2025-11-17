@@ -7,9 +7,12 @@ export const authGuard = () => {
   const router = inject(Router);
 
   if (authService.isAuthenticated()) {
-    return true;
-  } else {
-    router.navigate(['/admin/login']);
-    return false;
+    const user = authService.getCurrentUserValue();
+    if (user?.is_admin || user?.role === 'admin') {
+      return true;
+    }
   }
+
+  router.navigate(['/admin/login']);
+  return false;
 };

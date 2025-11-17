@@ -3,8 +3,9 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute, RouterModule } from '@angular/router';
 import { PropertyService } from '../../core/services/property.service';
-import { ContactService } from '../../core/services/contact.service';
+import { AuthService } from '../../core/services/auth.service';
 import { Property } from '../../core/models/property.model';
+import { User } from '../../core/models/user.model';
 import { ToastrService } from 'ngx-toastr';
 import { NgxSpinnerService } from 'ngx-spinner';
 
@@ -111,7 +112,7 @@ import { NgxSpinnerService } from 'ngx-spinner';
                 <i class="fas fa-ruler-combined"></i>
                 <div>
                   <span class="feature-label">Super Built-up Area</span>
-                  <span class="feature-value">{{ property.area }} sq ft</span>
+                  <span class="feature-value">{{ property.carpet_area }} sq ft</span>
                 </div>
               </div>
               <div class="feature-item" *ngIf="property.bedrooms !== 'N/A'">
@@ -205,16 +206,19 @@ import { NgxSpinnerService } from 'ngx-spinner';
             <div class="price-header">
               <div class="price-main">
                 <span class="price-label">Price</span>
-                <h2 class="price-value">{{ property.price }}</h2>
+                <h2 class="price-value">₹{{ formatPrice(property.price) }}</h2>
               </div>
               <div class="property-badges">
                 <span class="badge badge-primary">{{ property.type }}</span>
                 <span class="badge badge-success" *ngIf="property.status === 'active'">Available</span>
               </div>
+              <div class="tag-list" *ngIf="property.tags?.length">
+                <span class="tag" *ngFor="let tag of property.tags">{{ tag.name }}</span>
+              </div>
             </div>
 
             <!-- EMI Calculator -->
-            <div class="emi-calculator" *ngIf="property.type === 'For Sale' && !property.price.includes('Cr')">
+            <div class="emi-calculator" *ngIf="property.type === 'For Sale' && property.price < 10000000">
               <h4><i class="fas fa-calculator"></i> EMI Calculator</h4>
               <div class="calculator-inputs">
                 <div class="input-group">
@@ -253,7 +257,17 @@ import { NgxSpinnerService } from 'ngx-spinner';
                 </div>
                 <div class="owner-contact" *ngIf="property.owner_phone">
                   <i class="fas fa-phone"></i>
-                  <a [href]="'tel:' + property.owner_phone">{{ property.owner_phone }}</a>
+                  <ng-container *ngIf="property.owner_phone_full; else maskedPhone">
+                    <a [href]="'tel:' + property.owner_phone_full">{{ property.owner_phone }}</a>
+                  </ng-container>
+                  <ng-template #maskedPhone>
+                    <span>{{ property.owner_phone }}</span>
+                    <small class="phone-note">Full number available after verification</small>
+                  </ng-template>
+                </div>
+                <div class="owner-warning" *ngIf="property.owner_phone && !property.is_phone_approved">
+                  <i class="fas fa-lock"></i>
+                  <span>Phone verification pending. We'll alert you once the owner contact is approved.</span>
                 </div>
                 <div class="owner-contact" *ngIf="property.owner_email">
                   <i class="fas fa-envelope"></i>
@@ -935,6 +949,22 @@ import { NgxSpinnerService } from 'ngx-spinner';
       flex-wrap: wrap;
     }
 
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.75rem;
+    }
+
+    .tag-list .tag {
+      background: #eef2ff;
+      color: #3730a3;
+      border-radius: 999px;
+      padding: 0.2rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
     .badge {
       padding: 0.4rem 0.9rem;
       border-radius: 20px;
@@ -1082,6 +1112,28 @@ import { NgxSpinnerService } from 'ngx-spinner';
 
     .owner-contact a:hover {
       text-decoration: underline;
+    }
+
+    .phone-note {
+      display: block;
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-top: 0.2rem;
+    }
+
+    .owner-warning {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      background: #fff7ed;
+      color: #9a3412;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .owner-warning i {
+      color: #ea580c;
     }
 
     /* Action Buttons */
@@ -1721,10 +1773,12 @@ export class PropertyDetailComponent implements OnInit, OnDestroy {
     phone: '',
     message: ''
   };
+  isAuthenticated = false;
+  currentUser: User | null = null;
 
   constructor(
     private propertyService: PropertyService,
-    private contactService: ContactService,
+    private authService: AuthService,
     private route: ActivatedRoute,
     private router: Router,
     private toastr: ToastrService,
@@ -1732,6 +1786,9 @@ export class PropertyDetailComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
+    this.isAuthenticated = this.authService.isAuthenticated();
+    this.currentUser = this.authService.getCurrentUserValue();
+    this.prefillContactData();
     // Modal mode: use @Input propertyId
     if (this.isModalMode && this.propertyId) {
       this.loadProperty(this.propertyId.toString());
@@ -1818,9 +1875,10 @@ export class PropertyDetailComponent implements OnInit, OnDestroy {
       category: currentProperty.category,
       type: currentProperty.type
     }).subscribe({
-      next: (properties) => {
-        this.similarProperties = properties
-          .filter(p => p.id !== currentProperty.id)
+      next: (response) => {
+        const list = response?.results ?? [];
+        this.similarProperties = list
+          .filter((p: Property) => p.id !== currentProperty.id)
           .slice(0, 4);
       },
       error: (error) => console.error('Error loading similar properties:', error)
@@ -1875,29 +1933,35 @@ export class PropertyDetailComponent implements OnInit, OnDestroy {
     document.body.style.overflow = 'auto';
   }
 
-  getCategoryDisplayName(category: string): string {
+  getCategoryDisplayName(category?: string): string {
     const categoryMap: { [key: string]: string } = {
       'flat': 'Flat/Apartment',
       'house': 'House/Villa',
       'plot': 'Plot',
       'commercial': 'Commercial'
     };
+    if (!category) {
+      return 'General';
+    }
     return categoryMap[category] || category;
   }
 
-  getPropertyIcon(category: string): string {
+  getPropertyIcon(category?: string): string {
     const iconMap: { [key: string]: string } = {
       'flat': '🏢',
       'house': '🏠',
       'plot': '🗺️',
       'commercial': '🏪'
     };
+    if (!category) {
+      return '🏠';
+    }
     return iconMap[category] || '🏠';
   }
 
   getAmenitiesList(): string[] {
     if (!this.property?.amenities) return [];
-    return this.property.amenities.split(',').map(a => a.trim()).filter(a => a);
+    return this.property.amenities?.map(a => a.name) || [];
   }
 
   // Favorites
@@ -1980,6 +2044,10 @@ export class PropertyDetailComponent implements OnInit, OnDestroy {
 
   // Contact Modal
   openContactModal() {
+    if (!this.ensureAuthenticated()) {
+      return;
+    }
+    this.prefillContactData();
     this.showContactModal = true;
     document.body.style.overflow = 'hidden';
   }
@@ -1990,40 +2058,61 @@ export class PropertyDetailComponent implements OnInit, OnDestroy {
   }
 
   submitContactForm() {
-    if (this.submitting) return;
+    if (this.submitting || !this.property) return;
+    if (!this.ensureAuthenticated()) {
+      return;
+    }
     
     this.submitting = true;
     
-    // Add property details to message
     const fullMessage = `${this.contactData.message}\n\nProperty: ${this.property?.title}\nLocation: ${this.property?.location}\nPrice: ${this.property?.price}`;
     
-    const contactRequest = {
-      ...this.contactData,
+    const payload = {
+      name: this.contactData.name,
+      email: this.contactData.email,
+      phone: this.contactData.phone,
       message: fullMessage
     };
     
-    this.contactService.submitContactMessage(contactRequest).subscribe({
+    this.propertyService.createPropertyEnquiry(this.property.id, payload).subscribe({
       next: () => {
-        this.toastr.success('Your message has been sent successfully!', 'Success');
+        this.toastr.success('Your enquiry has been shared with the owner!', 'Success');
         this.closeContactModal();
         this.resetContactForm();
         this.submitting = false;
       },
       error: (error) => {
-        console.error('Error submitting contact form:', error);
-        this.toastr.error('Failed to send message. Please try again.', 'Error');
+        console.error('Error submitting enquiry:', error);
+        this.toastr.error(error?.error?.detail || 'Failed to send enquiry. Please try again.', 'Error');
         this.submitting = false;
       }
     });
   }
 
   resetContactForm() {
-    this.contactData = {
-      name: '',
-      email: '',
-      phone: '',
-      message: ''
-    };
+    this.contactData.message = '';
+    this.prefillContactData();
+  }
+
+  private ensureAuthenticated(): boolean {
+    if (!this.authService.isAuthenticated()) {
+      this.toastr.info('Please login to contact the property owner.');
+      this.router.navigate(['/login']);
+      return false;
+    }
+    return true;
+  }
+
+  private prefillContactData(): void {
+    if (!this.currentUser) {
+      return;
+    }
+    const fullName = `${this.currentUser.first_name ?? ''} ${this.currentUser.last_name ?? ''}`.trim();
+    this.contactData.name = fullName || this.currentUser.username;
+    this.contactData.email = this.currentUser.email;
+    if (this.currentUser.phone) {
+      this.contactData.phone = this.currentUser.phone;
+    }
   }
 
   // Actions
@@ -2080,5 +2169,16 @@ export class PropertyDetailComponent implements OnInit, OnDestroy {
 
   getImageCount(): number {
     return this.property?.images?.length || 0;
+  }
+
+  formatPrice(price: number): string {
+    if (!price || price === 0) return '0';
+    if (price >= 10000000) {
+      return `${(price / 10000000).toFixed(2)} Cr`;
+    } else if (price >= 100000) {
+      return `${(price / 100000).toFixed(2)} L`;
+    } else {
+      return price.toLocaleString('en-IN');
+    }
   }
 }

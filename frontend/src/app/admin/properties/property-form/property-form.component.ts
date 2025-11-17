@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { PropertyService } from '../../../core/services/property.service';
-import { CreatePropertyRequest } from '../../../core/models/property.model';
+import { CreatePropertyRequest, Tag, CategoryOption, SubCategoryOption, CityOption, Amenity } from '../../../core/models/property.model';
 import { ToastrService } from 'ngx-toastr';
 import { NgxSpinnerService } from 'ngx-spinner';
 
@@ -78,12 +78,32 @@ import { NgxSpinnerService } from 'ngx-spinner';
             
             <div class="form-group">
               <label for="category">Category *</label>
-              <select id="category" name="category" [(ngModel)]="propertyData.category" required>
+              <select 
+                id="category" 
+                name="category" 
+                [(ngModel)]="propertyData.category" 
+                (change)="onCategoryChange()" 
+                required
+              >
                 <option value="">Select Category</option>
-                <option value="flat">Flat/Apartment</option>
-                <option value="house">House/Villa</option>
-                <option value="plot">Plot</option>
-                <option value="commercial">Commercial</option>
+                <option *ngFor="let category of categories" [value]="category.slug">
+                  {{ category.name }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="subcategory">Sub Category</label>
+              <select 
+                id="subcategory" 
+                name="subcategory" 
+                [(ngModel)]="propertyData.subcategory"
+                [disabled]="filteredSubcategories.length === 0"
+              >
+                <option value="">{{ filteredSubcategories.length ? 'Select Sub Category' : 'No sub categories' }}</option>
+                <option *ngFor="let sub of filteredSubcategories" [value]="sub.slug">
+                  {{ sub.name }}
+                </option>
               </select>
             </div>
 
@@ -97,15 +117,17 @@ import { NgxSpinnerService } from 'ngx-spinner';
             </div>
 
             <div class="form-group">
-              <label for="price">Price *</label>
+              <label for="price">Price (₹) *</label>
               <input 
-                type="text" 
+                type="number" 
                 id="price"
                 name="price"
                 [(ngModel)]="propertyData.price" 
                 required 
-                placeholder="e.g., ₹2.5 Cr or ₹45,000/month"
+                min="0"
+                placeholder="e.g., 25000000 (for ₹2.5 Cr)"
               >
+              <small class="field-hint">Enter price in rupees (integer). Example: 25000000 for ₹2.5 Cr</small>
             </div>
           </div>
         </div>
@@ -127,46 +149,56 @@ import { NgxSpinnerService } from 'ngx-spinner';
             </div>
 
             <div class="form-group">
-              <label for="pincode">Pincode *</label>
-              <div class="pincode-input-group">
-                <input 
-                  type="text" 
-                  id="pincode"
-                  name="pincode"
-                  [(ngModel)]="propertyData.pincode" 
+              <label for="city">City *</label>
+              <div class="city-input-group">
+                <select 
+                  id="city"
+                  name="city"
+                  [(ngModel)]="propertyData.city" 
                   required
-                  maxlength="6"
-                  pattern="[0-9]{6}"
-                  placeholder="Enter 6-digit pincode"
-                  (blur)="onPincodeEnter()"
+                  (change)="handleCityChange()"
                 >
+                  <option value="">Select City</option>
+                  <option *ngFor="let city of cities" [value]="city.name">
+                    {{ city.name }} ({{ city.state }}) {{ city.is_active ? '' : '(inactive)' }}
+                  </option>
+                </select>
                 <button 
                   type="button" 
                   class="btn-lookup"
                   (click)="onPincodeEnter()"
                   [disabled]="lookingUpPincode || !propertyData.pincode || propertyData.pincode.length !== 6"
+                  title="Lookup pincode for selected city"
                 >
                   <i class="fas fa-search"></i>
                   {{ lookingUpPincode ? 'Looking up...' : 'Lookup' }}
                 </button>
               </div>
-              <small class="hint" *ngIf="pincodeNotFound">
-                <i class="fas fa-info-circle"></i> Pincode not found. 
-                <a href="#" (click)="showAddPincodeHelp($event)">Add it manually</a> or contact admin.
+              <small class="field-hint" *ngIf="allowedPincodes.length">
+                Allowed pincodes: {{ allowedPincodes.join(', ') }}
+              </small>
+              <small class="field-hint warning" *ngIf="!allowedPincodes.length && propertyData.city">
+                No pincodes enabled for this city yet. Contact admin to add them.
               </small>
             </div>
 
             <div class="form-group">
-              <label for="city">City *</label>
+              <label for="pincode">Pincode *</label>
               <input 
                 type="text" 
-                id="city"
-                name="city"
-                [(ngModel)]="propertyData.city" 
+                id="pincode"
+                name="pincode"
+                [(ngModel)]="propertyData.pincode" 
                 required
-                [readonly]="cityAutoFilled"
-                placeholder="Auto-filled from pincode"
+                maxlength="6"
+                pattern="[0-9]{6}"
+                placeholder="Enter 6-digit pincode"
+                (blur)="onPincodeEnter()"
               >
+              <small class="hint" *ngIf="pincodeNotFound">
+                <i class="fas fa-info-circle"></i> Pincode not found. 
+                <a href="#" (click)="showAddPincodeHelp($event)">Add it manually</a> or contact admin.
+              </small>
             </div>
 
             <div class="form-group">
@@ -177,8 +209,8 @@ import { NgxSpinnerService } from 'ngx-spinner';
                 name="state"
                 [(ngModel)]="propertyData.state" 
                 required
-                [readonly]="cityAutoFilled"
-                placeholder="Auto-filled from pincode"
+                readonly
+                placeholder="Auto-filled from city selection"
               >
             </div>
 
@@ -190,15 +222,66 @@ import { NgxSpinnerService } from 'ngx-spinner';
           <h2><i class="fas fa-home"></i> Property Details</h2>
           <div class="form-grid">
             <div class="form-group">
-              <label for="area">Area (sq ft) *</label>
+              <label for="carpet_area">Carpet Area (sq ft) *</label>
               <input 
                 type="number" 
-                id="area"
-                name="area"
-                [(ngModel)]="propertyData.area" 
+                id="carpet_area"
+                name="carpet_area"
+                [(ngModel)]="propertyData.carpet_area" 
                 required 
                 min="1"
                 placeholder="e.g., 1500"
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="buildup_area">Buildup Area (sq ft)</label>
+              <input 
+                type="number" 
+                id="buildup_area"
+                name="buildup_area"
+                [(ngModel)]="propertyData.buildup_area" 
+                min="1"
+                placeholder="e.g., 1800"
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="length">Length (ft)</label>
+              <input 
+                type="number" 
+                id="length"
+                name="length"
+                [(ngModel)]="propertyData.length" 
+                step="0.01"
+                min="0"
+                placeholder="e.g., 50.5"
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="width">Width (ft)</label>
+              <input 
+                type="number" 
+                id="width"
+                name="width"
+                [(ngModel)]="propertyData.width" 
+                step="0.01"
+                min="0"
+                placeholder="e.g., 30.5"
+              >
+            </div>
+
+            <div class="form-group">
+              <label for="height">Height (ft)</label>
+              <input 
+                type="number" 
+                id="height"
+                name="height"
+                [(ngModel)]="propertyData.height" 
+                step="0.01"
+                min="0"
+                placeholder="e.g., 10.5 (for buildings)"
               >
             </div>
 
@@ -237,15 +320,56 @@ import { NgxSpinnerService } from 'ngx-spinner';
             </div>
 
             <div class="form-group full-width">
-              <label for="amenities">Amenities (comma separated)</label>
-              <input 
-                type="text" 
-                id="amenities"
-                name="amenities"
-                [(ngModel)]="propertyData.amenities" 
-                placeholder="e.g., Parking, Gym, Swimming Pool, Security, Garden, Elevator"
-              >
-              <small class="field-hint">Separate multiple amenities with commas</small>
+              <label>Amenities</label>
+              <div class="amenity-selector">
+                <div class="amenity-search">
+                  <input 
+                    type="text" 
+                    [(ngModel)]="amenitySearchQuery"
+                    placeholder="Search amenities..."
+                    class="amenity-search-input"
+                  >
+                  <i class="fas fa-search"></i>
+                </div>
+                <div class="amenity-list">
+                  <label *ngFor="let amenity of filteredAmenities" class="amenity-item">
+                    <input 
+                      type="checkbox" 
+                      [checked]="isAmenitySelected(amenity.id)"
+                      (change)="toggleAmenity(amenity.id)"
+                    >
+                    <span class="amenity-name">
+                      <i *ngIf="amenity.icon" [class]="amenity.icon"></i>
+                      {{ amenity.name }}
+                    </span>
+                    <small *ngIf="amenity.description" class="amenity-desc">{{ amenity.description }}</small>
+                  </label>
+                  <p *ngIf="filteredAmenities.length === 0" class="no-amenities">No amenities found</p>
+                </div>
+                <div class="selected-amenities" *ngIf="selectedAmenityIds.length > 0">
+                  <strong>Selected:</strong>
+                  <span *ngFor="let id of selectedAmenityIds" class="selected-amenity-badge">
+                    {{ getAmenityName(id) }}
+                    <button type="button" (click)="toggleAmenity(id)" class="remove-amenity">×</button>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group full-width" *ngIf="availableTags.length">
+              <label>Tags</label>
+              <div class="tag-grid">
+                <label *ngFor="let tag of availableTags">
+                  <input 
+                    type="checkbox" 
+                    [value]="tag.id" 
+                    [checked]="selectedTagIds.includes(tag.id)"
+                    (change)="toggleTag(tag.id, $event)"
+                  >
+                  <span>{{ tag.name }}</span>
+                </label>
+              </div>
+              <small class="field-hint">Select approvals or attributes that apply to this listing</small>
             </div>
           </div>
         </div>
@@ -395,6 +519,29 @@ import { NgxSpinnerService } from 'ngx-spinner';
       min-height: 100px;
     }
 
+    .tag-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+    }
+
+    .tag-grid label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.4rem 0.8rem;
+      border-radius: 999px;
+      border: 1px solid #cbd5f5;
+      cursor: pointer;
+      font-size: 0.85rem;
+      background: #f8fafc;
+    }
+
+    .tag-grid input {
+      width: auto;
+      margin: 0;
+    }
+
     /* Pincode Input Group */
     .pincode-input-group {
       display: flex;
@@ -402,6 +549,15 @@ import { NgxSpinnerService } from 'ngx-spinner';
     }
 
     .pincode-input-group input {
+      flex: 1;
+    }
+
+    .city-input-group {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .city-input-group select {
       flex: 1;
     }
 
@@ -457,6 +613,139 @@ import { NgxSpinnerService } from 'ngx-spinner';
       font-size: 0.75rem;
       color: #64748b;
       margin-top: 0.25rem;
+    }
+
+    .field-hint.warning {
+      color: #b45309;
+    }
+
+    /* Amenity Selector Styles */
+    .amenity-selector {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: white;
+    }
+
+    .amenity-search {
+      position: relative;
+      padding: 0.75rem;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .amenity-search-input {
+      width: 100%;
+      padding: 0.5rem 2rem 0.5rem 0.75rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+
+    .amenity-search i {
+      position: absolute;
+      right: 1.5rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #64748b;
+    }
+
+    .amenity-list {
+      max-height: 300px;
+      overflow-y: auto;
+      padding: 0.5rem;
+    }
+
+    .amenity-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .amenity-item:hover {
+      background: #f8fafc;
+    }
+
+    .amenity-item input[type="checkbox"] {
+      margin-top: 0.2rem;
+      cursor: pointer;
+    }
+
+    .amenity-name {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 500;
+      color: #1e293b;
+    }
+
+    .amenity-name i {
+      color: #3b82f6;
+      font-size: 1rem;
+    }
+
+    .amenity-desc {
+      display: block;
+      color: #64748b;
+      font-size: 0.85rem;
+      margin-top: 0.25rem;
+    }
+
+    .no-amenities {
+      padding: 1rem;
+      text-align: center;
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .selected-amenities {
+      padding: 0.75rem;
+      border-top: 1px solid #e2e8f0;
+      background: #f8fafc;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .selected-amenities strong {
+      color: #1e293b;
+      font-size: 0.85rem;
+    }
+
+    .selected-amenity-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.3rem 0.6rem;
+      background: #2563eb;
+      color: white;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .remove-amenity {
+      background: rgba(255, 255, 255, 0.3);
+      border: none;
+      color: white;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      line-height: 1;
+      padding: 0;
+    }
+
+    .remove-amenity:hover {
+      background: rgba(255, 255, 255, 0.5);
     }
 
     /* Image Upload Styles */
@@ -696,31 +985,44 @@ export class PropertyFormComponent implements OnInit {
   propertyData: CreatePropertyRequest = {
     title: '',
     category: '',
+    subcategory: '',
     type: '',
-    price: '',
+    price: 0,
     location: '',
-    area: 0,
+    carpet_area: 0,
+    buildup_area: 0,
+    length: undefined,
+    width: undefined,
+    height: undefined,
     bedrooms: 'N/A',
     bathrooms: 'N/A',
     city: '',
     state: '',
     pincode: '',
     description: '',
-    amenities: '',
+    amenity_ids: [],
     owner_name: '',
     owner_phone: '',
     owner_email: ''
   };
   
   isEdit = false;
-  cities: any[] = [];
+  cities: CityOption[] = [];
   propertyId: number | null = null;
   loading = false;
   uploadingImage = false;
   existingImages: any[] = [];
   lookingUpPincode = false;
   pincodeNotFound = false;
-  cityAutoFilled = false;
+  availableTags: Tag[] = [];
+  selectedTagIds: number[] = [];
+  availableAmenities: Amenity[] = [];
+  selectedAmenityIds: number[] = [];
+  amenitySearchQuery = '';
+  categories: CategoryOption[] = [];
+  filteredSubcategories: SubCategoryOption[] = [];
+  selectedCity: CityOption | null = null;
+  allowedPincodes: string[] = [];
 
   constructor(
     private propertyService: PropertyService,
@@ -732,6 +1034,9 @@ export class PropertyFormComponent implements OnInit {
 
   ngOnInit() {
     this.loadCities();
+    this.loadCategories();
+    this.loadTags();
+    this.loadAmenities();
     this.route.params.subscribe(params => {
       if (params['id']) {
         this.isEdit = true;
@@ -741,10 +1046,69 @@ export class PropertyFormComponent implements OnInit {
     });
   }
 
+  loadAmenities() {
+    this.propertyService.getAmenities().subscribe({
+      next: (amenities) => this.availableAmenities = amenities,
+      error: () => this.toastr.error('Failed to load amenities')
+    });
+  }
+
+  get filteredAmenities(): Amenity[] {
+    if (!this.amenitySearchQuery) {
+      return this.availableAmenities;
+    }
+    const query = this.amenitySearchQuery.toLowerCase();
+    return this.availableAmenities.filter(a => 
+      a.name.toLowerCase().includes(query) || 
+      (a.description && a.description.toLowerCase().includes(query))
+    );
+  }
+
+  toggleAmenity(amenityId: number) {
+    const index = this.selectedAmenityIds.indexOf(amenityId);
+    if (index > -1) {
+      this.selectedAmenityIds.splice(index, 1);
+    } else {
+      this.selectedAmenityIds.push(amenityId);
+    }
+  }
+
+  isAmenitySelected(amenityId: number): boolean {
+    return this.selectedAmenityIds.includes(amenityId);
+  }
+
+  getAmenityName(amenityId: number): string {
+    const amenity = this.availableAmenities.find(a => a.id === amenityId);
+    return amenity?.name || '';
+  }
+
+  loadTags() {
+    this.propertyService.getTags().subscribe({
+      next: (tags) => this.availableTags = tags,
+      error: () => this.toastr.error('Failed to load tags')
+    });
+  }
+
+  loadCategories() {
+    this.propertyService.getCategories().subscribe({
+      next: (categories) => {
+        this.categories = categories;
+        this.syncSubcategoryOptions();
+      },
+      error: () => this.toastr.error('Failed to load categories')
+    });
+  }
+
   loadCities() {
     this.propertyService.getCities().subscribe({
       next: (cities) => {
         this.cities = cities;
+        if (!this.isEdit && !this.propertyData.city && this.cities.length) {
+          this.propertyData.city = this.cities[0].name;
+          this.propertyData.state = this.cities[0].state;
+        }
+        this.ensureCityAvailability();
+        this.syncSelectedCity();
       },
       error: (error) => {
         console.error('Error loading cities:', error);
@@ -763,10 +1127,14 @@ export class PropertyFormComponent implements OnInit {
       }
       return;
     }
+
+    if (this.allowedPincodes.length && !this.allowedPincodes.includes(pincode)) {
+      this.toastr.error('This pincode is not enabled for the selected city. Please contact admin.', 'Pincode Restricted');
+      return;
+    }
     
     this.lookingUpPincode = true;
     this.pincodeNotFound = false;
-    this.cityAutoFilled = false;
     
     this.propertyService.lookupPincode(pincode).subscribe({
       next: (response) => {
@@ -775,15 +1143,15 @@ export class PropertyFormComponent implements OnInit {
           // Auto-fill city and state
           this.propertyData.city = response.city;
           this.propertyData.state = response.state;
-          this.cityAutoFilled = true;
           this.pincodeNotFound = false;
+          this.ensureCityAvailability();
+          this.syncSelectedCity();
           this.toastr.success(`Found: ${response.city}, ${response.state}`, 'Pincode Verified', { timeOut: 3000 });
         }
       },
       error: (error) => {
         this.lookingUpPincode = false;
         this.pincodeNotFound = true;
-        this.cityAutoFilled = false;
         
         const message = error.error?.message || 'Pincode not found in our database.';
         this.toastr.warning(message, 'Pincode Not Found', { timeOut: 5000 });
@@ -793,10 +1161,9 @@ export class PropertyFormComponent implements OnInit {
 
   showAddPincodeHelp(event: Event) {
     event.preventDefault();
-    this.cityAutoFilled = false;
     this.pincodeNotFound = false;
     this.toastr.info(
-      'Enter City and State manually, then contact admin to add this pincode to the database.',
+      'Select the correct city/state and contact admin to add this pincode to the database.',
       'Add Pincode Manually',
       { timeOut: 8000 }
     );
@@ -813,23 +1180,32 @@ export class PropertyFormComponent implements OnInit {
           if (property) {
             this.propertyData = {
               title: property.title,
-              category: property.category,
+              category: property.category || '',
+              subcategory: property.subcategory || '',
               type: property.type,
               price: property.price,
               location: property.location,
-              area: property.area,
+              carpet_area: property.carpet_area,
+              buildup_area: property.buildup_area,
+              length: property.length,
+              width: property.width,
+              height: property.height,
               bedrooms: property.bedrooms,
               bathrooms: property.bathrooms,
               city: property.city,
               state: property.state,
               pincode: property.pincode || '',
               description: property.description || '',
-              amenities: property.amenities || '',
+              amenity_ids: property.amenities ? property.amenities.map((a: any) => a.id) : [],
               owner_name: property.owner_name || '',
               owner_phone: property.owner_phone || '',
               owner_email: property.owner_email || ''
             };
             this.existingImages = property.images || [];
+            this.selectedTagIds = property.tags ? property.tags.map(tag => tag.id) : [];
+            this.ensureCityAvailability();
+            this.syncSelectedCity();
+            this.syncSubcategoryOptions();
           }
           this.loading = false;
           this.spinner.hide();
@@ -955,6 +1331,9 @@ export class PropertyFormComponent implements OnInit {
     this.loading = true;
     this.spinner.show();
 
+    this.propertyData.tag_ids = this.selectedTagIds;
+    this.propertyData.amenity_ids = this.selectedAmenityIds;
+
     if (this.isEdit && this.propertyId) {
       this.propertyService.updateProperty(this.propertyId, this.propertyData).subscribe({
         next: (response) => {
@@ -970,6 +1349,10 @@ export class PropertyFormComponent implements OnInit {
           this.loading = false;
           this.spinner.hide();
           console.error('Error updating property:', error);
+
+          if (this.handleLocationError(error)) {
+            return;
+          }
           
           // Show specific error message if available
           let errorMessage = 'Error updating property. Please check all fields.';
@@ -1000,6 +1383,10 @@ export class PropertyFormComponent implements OnInit {
           this.loading = false;
           this.spinner.hide();
           console.error('Error creating property:', error);
+
+          if (this.handleLocationError(error)) {
+            return;
+          }
           
           // Show specific error message if available
           let errorMessage = 'Error creating property. Please check all fields.';
@@ -1032,5 +1419,103 @@ export class PropertyFormComponent implements OnInit {
 
   goBack() {
     this.router.navigate(['/admin/properties']);
+  }
+
+  toggleTag(tagId: number, event: Event) {
+    const checked = (event.target as HTMLInputElement).checked;
+    if (checked) {
+      if (!this.selectedTagIds.includes(tagId)) {
+        this.selectedTagIds.push(tagId);
+      }
+    } else {
+      this.selectedTagIds = this.selectedTagIds.filter(id => id !== tagId);
+    }
+  }
+
+  onCategoryChange() {
+    this.syncSubcategoryOptions();
+  }
+
+  handleCityChange() {
+    this.syncSelectedCity();
+    this.propertyData.pincode = '';
+  }
+
+  private syncSelectedCity() {
+    if (!this.propertyData.city) {
+      this.selectedCity = null;
+      this.allowedPincodes = [];
+      return;
+    }
+    const match = this.cities.find(
+      city => city.name.toLowerCase() === this.propertyData.city.toLowerCase()
+    );
+    this.selectedCity = match || null;
+    if (this.selectedCity) {
+      this.propertyData.state = this.selectedCity.state;
+      this.allowedPincodes = this.selectedCity.pincodes || [];
+    } else {
+      this.allowedPincodes = [];
+    }
+  }
+
+  private ensureCityAvailability() {
+    if (!this.propertyData.city) return;
+    const exists = this.cities.some(
+      city => city.name.toLowerCase() === this.propertyData.city.toLowerCase()
+    );
+    if (!exists) {
+      this.cities = [
+        ...this.cities,
+        {
+          id: -1,
+          name: this.propertyData.city,
+          state: this.propertyData.state || '',
+          is_active: false,
+          pincodes: []
+        }
+      ];
+    }
+  }
+
+  private handleLocationError(error: any): boolean {
+    const code = error?.error?.error_code;
+    if (!code) {
+      return false;
+    }
+    const cityMsg = error?.error?.city?.[0];
+    const pincodeMsg = error?.error?.pincode?.[0];
+    if (code === 'city_not_supported') {
+      alert(cityMsg || 'We are not live in this city yet. Please contact support.');
+      return true;
+    }
+    if (code === 'city_inactive') {
+      alert(cityMsg || 'This city is currently inactive. Please choose another active city.');
+      return true;
+    }
+    if (code === 'pincode_not_allowed') {
+      this.toastr.error(pincodeMsg || 'This pincode is not enabled for the selected city.', 'Pincode Restricted');
+      return true;
+    }
+    return false;
+  }
+
+  private syncSubcategoryOptions() {
+    if (!this.categories.length) {
+      this.filteredSubcategories = [];
+      return;
+    }
+
+    const selected = this.categories.find(cat => cat.slug === this.propertyData.category);
+    this.filteredSubcategories = selected?.subcategories?.filter(sub => sub.is_active) || [];
+
+    if (!this.filteredSubcategories.length) {
+      this.propertyData.subcategory = '';
+    } else {
+      const exists = this.filteredSubcategories.some(sub => sub.slug === this.propertyData.subcategory);
+      if (!exists) {
+        this.propertyData.subcategory = '';
+      }
+    }
   }
 }

@@ -2,13 +2,22 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { ApiService } from './api.service';
-import { 
-  Property, 
-  PropertyStats, 
-  PropertyFilters, 
+import {
+  Property,
+  PropertyStats,
+  PropertyFilters,
   CreatePropertyRequest,
   PropertyImage,
-  PropertyImageUploadResponse
+  PropertyImageUploadResponse,
+  PropertyEnquiry,
+  CreatePropertyEnquiryRequest,
+  CustomerPropertyStats,
+  Tag,
+  CategoryOption,
+  SubCategoryOption,
+  CityOption,
+  PincodeRecord,
+  Amenity
 } from '../models/property.model';
 
 // Response interface for paginated API
@@ -26,10 +35,9 @@ export class PropertyService {
 
   constructor(private apiService: ApiService) {}
 
-  // Get all active properties (public)
-  getProperties(filters?: PropertyFilters): Observable<Property[]> {
-    return this.apiService.get<PaginatedResponse<Property>>('/properties/', filters)
-      .pipe(map(response => response.results || []));
+  // Get all active properties (public, paginated response)
+  getProperties(filters?: PropertyFilters): Observable<PaginatedResponse<Property>> {
+    return this.apiService.get<PaginatedResponse<Property>>('/properties/', filters);
   }
 
   // Get property by ID (public)
@@ -75,6 +83,10 @@ export class PropertyService {
     return this.apiService.get<PropertyStats>('/properties/admin/stats/');
   }
 
+  getCustomerPropertyStats(): Observable<CustomerPropertyStats> {
+    return this.apiService.get<CustomerPropertyStats>('/properties/customer/my-properties/stats/');
+  }
+
   getPublicPropertyStats(): Observable<PropertyStats> {
     return this.apiService.get<PropertyStats>('/properties/stats/');
   }
@@ -85,8 +97,9 @@ export class PropertyService {
   }
 
   // Get all available cities
-  getCities(): Observable<{ city: string; count: number }[]> {
-    return this.apiService.get<{ city: string; count: number }[]>('/properties/cities/');
+  getCities(): Observable<CityOption[]> {
+    return this.apiService.get<CityOption[] | { results: CityOption[] }>('/properties/cities/')
+      .pipe(map(response => this.normalizeList(response)));
   }
 
   // Lookup pincode to get city and state
@@ -97,6 +110,153 @@ export class PropertyService {
   // Track property view
   trackPropertyView(id: number): Observable<{ view_count: number }> {
     return this.apiService.post<{ view_count: number }>(`/properties/${id}/track-view/`, {});
+  }
+
+  getMyProperties(): Observable<Property[]> {
+    return this.apiService.get<PaginatedResponse<Property>>('/properties/customer/my-properties/')
+      .pipe(map(response => response.results || []));
+  }
+
+  // Customer: Create property
+  createCustomerProperty(property: CreatePropertyRequest): Observable<Property> {
+    return this.apiService.post<Property>('/properties/customer/my-properties/create/', property);
+  }
+
+  // Customer: Get property by ID
+  getCustomerProperty(id: number): Observable<Property> {
+    return this.apiService.get<Property>(`/properties/customer/my-properties/${id}/`);
+  }
+
+  // Customer: Update property
+  updateCustomerProperty(id: number, property: Partial<CreatePropertyRequest>): Observable<Property> {
+    return this.apiService.put<Property>(`/properties/customer/my-properties/${id}/`, property);
+  }
+
+  // Customer: Delete property
+  deleteCustomerProperty(id: number): Observable<any> {
+    return this.apiService.delete(`/properties/customer/my-properties/${id}/`);
+  }
+
+  // Customer: Upload property image
+  uploadCustomerPropertyImage(propertyId: number, file: File, caption?: string, isPrimary?: boolean): Observable<PropertyImageUploadResponse> {
+    const additionalData: any = {};
+    if (caption) additionalData.caption = caption;
+    if (isPrimary !== undefined) additionalData.is_primary = isPrimary;
+    
+    return this.apiService.uploadFile<PropertyImageUploadResponse>(`/properties/customer/${propertyId}/images/`, file, additionalData);
+  }
+
+  getMyEnquiries(): Observable<PropertyEnquiry[]> {
+    return this.apiService.get<PaginatedResponse<PropertyEnquiry>>('/properties/customer/my-enquiries/')
+      .pipe(map(response => response.results || []));
+  }
+
+  getTags(): Observable<Tag[]> {
+    return this.apiService.get<Tag[] | { results: Tag[] }>('/properties/tags/')
+      .pipe(map(response => this.normalizeList(response)));
+  }
+
+  // Get all amenities (public)
+  getAmenities(): Observable<Amenity[]> {
+    return this.apiService.get<Amenity[] | { results: Amenity[] }>('/properties/amenities/')
+      .pipe(map(response => this.normalizeList(response)));
+  }
+
+  getAdminTags(): Observable<Tag[]> {
+    return this.apiService.get<Tag[] | { results: Tag[] }>('/properties/admin/tags/')
+      .pipe(map(response => this.normalizeList(response)));
+  }
+
+  createTag(payload: Partial<Tag>): Observable<Tag> {
+    return this.apiService.post<Tag>('/properties/admin/tags/', payload);
+  }
+
+  updateTag(id: number, payload: Partial<Tag>): Observable<Tag> {
+    return this.apiService.put<Tag>(`/properties/admin/tags/${id}/`, payload);
+  }
+
+  deleteTag(id: number): Observable<void> {
+    return this.apiService.delete<void>(`/properties/admin/tags/${id}/`);
+  }
+
+  getCategories(): Observable<CategoryOption[]> {
+    return this.apiService.get<CategoryOption[] | { results: CategoryOption[] }>('/properties/categories/')
+      .pipe(map(response => this.normalizeList(response)));
+  }
+
+  getAdminCategories(): Observable<CategoryOption[]> {
+    return this.apiService.get<CategoryOption[] | { results: CategoryOption[] }>('/properties/admin/categories/')
+      .pipe(map(response => this.normalizeList(response)));
+  }
+
+  createCategory(payload: Partial<CategoryOption>): Observable<CategoryOption> {
+    return this.apiService.post<CategoryOption>('/properties/admin/categories/', payload);
+  }
+
+  updateCategory(id: number, payload: Partial<CategoryOption>): Observable<CategoryOption> {
+    return this.apiService.put<CategoryOption>(`/properties/admin/categories/${id}/`, payload);
+  }
+
+  deleteCategory(id: number): Observable<void> {
+    return this.apiService.delete<void>(`/properties/admin/categories/${id}/`);
+  }
+
+  getAdminSubcategories(categoryId?: number): Observable<SubCategoryOption[]> {
+    const params = categoryId ? { category: categoryId } : undefined;
+    return this.apiService.get<SubCategoryOption[] | { results: SubCategoryOption[] }>('/properties/admin/subcategories/', params)
+      .pipe(map(response => this.normalizeList(response)));
+  }
+
+  createSubcategory(payload: Partial<SubCategoryOption>): Observable<SubCategoryOption> {
+    return this.apiService.post<SubCategoryOption>('/properties/admin/subcategories/', payload);
+  }
+
+  updateSubcategory(id: number, payload: Partial<SubCategoryOption>): Observable<SubCategoryOption> {
+    return this.apiService.put<SubCategoryOption>(`/properties/admin/subcategories/${id}/`, payload);
+  }
+
+  deleteSubcategory(id: number): Observable<void> {
+    return this.apiService.delete<void>(`/properties/admin/subcategories/${id}/`);
+  }
+
+  createPropertyEnquiry(propertyId: number, payload: CreatePropertyEnquiryRequest): Observable<PropertyEnquiry> {
+    return this.apiService.post<PropertyEnquiry>(`/properties/${propertyId}/enquiries/`, payload);
+  }
+
+  // Admin Cities / Pincodes
+  getAdminCities(): Observable<CityOption[]> {
+    return this.apiService.get<CityOption[] | { results: CityOption[] }>('/properties/admin/cities/')
+      .pipe(map(response => this.normalizeList(response)));
+  }
+
+  createCity(payload: Partial<CityOption>): Observable<CityOption> {
+    return this.apiService.post<CityOption>('/properties/admin/cities/', payload);
+  }
+
+  updateCity(id: number, payload: Partial<CityOption>): Observable<CityOption> {
+    return this.apiService.put<CityOption>(`/properties/admin/cities/${id}/`, payload);
+  }
+
+  deleteCity(id: number): Observable<void> {
+    return this.apiService.delete<void>(`/properties/admin/cities/${id}/`);
+  }
+
+  getAdminPincodes(cityId?: number): Observable<PincodeRecord[]> {
+    const params = cityId ? { city: cityId } : undefined;
+    return this.apiService.get<PincodeRecord[] | { results: PincodeRecord[] }>('/properties/admin/pincodes/', params)
+      .pipe(map(response => this.normalizeList(response)));
+  }
+
+  createPincode(payload: { city_ref: number; pincode: string; area?: string; state?: string; is_active?: boolean }): Observable<PincodeRecord> {
+    return this.apiService.post<PincodeRecord>('/properties/admin/pincodes/', payload);
+  }
+
+  updatePincode(id: number, payload: { city_ref?: number; pincode?: string; area?: string; state?: string; is_active?: boolean }): Observable<PincodeRecord> {
+    return this.apiService.put<PincodeRecord>(`/properties/admin/pincodes/${id}/`, payload);
+  }
+
+  deletePincode(id: number): Observable<void> {
+    return this.apiService.delete<void>(`/properties/admin/pincodes/${id}/`);
   }
 
   // Admin: Upload property image
@@ -114,7 +274,10 @@ export class PropertyService {
   }
 
   // Helper methods
-  getCategoryDisplayName(category: string): string {
+  getCategoryDisplayName(category?: string): string {
+    if (!category) {
+      return 'General';
+    }
     const categoryMap: { [key: string]: string } = {
       'flat': 'Flat/Apartment',
       'house': 'House/Villa',
@@ -146,5 +309,15 @@ export class PropertyService {
       'rented': 'primary'
     };
     return colorMap[status] || 'secondary';
+  }
+
+  private normalizeList<T>(response: T[] | { results: T[] } | null | undefined): T[] {
+    if (Array.isArray(response)) {
+      return response;
+    }
+    if (response && Array.isArray((response as any).results)) {
+      return (response as any).results;
+    }
+    return [];
   }
 }

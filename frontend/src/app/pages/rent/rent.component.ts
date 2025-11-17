@@ -261,10 +261,10 @@ import { PropertyDetailComponent } from '../property-detail/property-detail.comp
                 <span *ngIf="property.bathrooms && property.bathrooms !== 'N/A'">
                   <i class="fas fa-bath"></i> {{ property.bathrooms }}
                 </span>
-                <span><i class="fas fa-ruler"></i> {{ property.area }} sq ft</span>
+                <span><i class="fas fa-ruler"></i> {{ property.carpet_area }} sq ft</span>
               </div>
               <div class="rental-pricing">
-                <span class="rent-amount">{{ property.price }}</span>
+                <span class="rent-amount">₹{{ formatRent(property.price) }}</span>
                 <button class="btn-view" (click)="viewProperty(property.id)">
                   View <i class="fas fa-arrow-right"></i>
                 </button>
@@ -1756,7 +1756,8 @@ export class RentComponent implements OnInit {
     }
     
     this.propertyService.getProperties(filters).subscribe({
-      next: (properties) => {
+      next: (response) => {
+        const properties = (response && response.results) ? response.results : [];
         this.properties = properties.filter(p => p.type === 'For Rent');
         this.totalProperties = this.properties.length;
         this.filteredProperties = [...this.properties];
@@ -1818,8 +1819,8 @@ export class RentComponent implements OnInit {
       case 'price-low':
       case 'price-high':
         this.filteredProperties.sort((a, b) => {
-          const priceA = this.extractRent(a.price);
-          const priceB = this.extractRent(b.price);
+          const priceA = typeof a.price === 'number' ? a.price : this.extractRent(String(a.price));
+          const priceB = typeof b.price === 'number' ? b.price : this.extractRent(String(b.price));
           return this.sortBy === 'price-low' ? priceA - priceB : priceB - priceA;
         });
         break;
@@ -1893,21 +1894,27 @@ export class RentComponent implements OnInit {
     return fav ? JSON.parse(fav) : [];
   }
 
-  getPropertyIcon(category: string): string {
+  getPropertyIcon(category?: string): string {
     const icons: any = {
       'flat': '🏢',
       'house': '🏠',
       'commercial': '🏪'
     };
+    if (!category) {
+      return '🏠';
+    }
     return icons[category] || '🏠';
   }
 
-  getCategoryName(category: string): string {
+  getCategoryName(category?: string): string {
     const names: any = {
       'flat': 'Apartment',
       'house': 'Independent House',
       'commercial': 'Commercial Space'
     };
+    if (!category) {
+      return 'General';
+    }
     return names[category] || category;
   }
 
@@ -1965,6 +1972,15 @@ export class RentComponent implements OnInit {
 
   goToImage(propertyIndex: number, imageIndex: number): void {
     this.propertyImageIndices[propertyIndex] = imageIndex;
+  }
+
+  formatRent(price: number): string {
+    if (!price || price === 0) return '0';
+    if (price >= 100000) {
+      return `${(price / 100000).toFixed(2)} L`;
+    } else {
+      return price.toLocaleString('en-IN');
+    }
   }
 }
 

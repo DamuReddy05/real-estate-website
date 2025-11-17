@@ -6,6 +6,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { LoginRequest } from '../../core/models/user.model';
 import { ToastrService } from 'ngx-toastr';
 import { NgxSpinnerService } from 'ngx-spinner';
+import { GoogleAuthService } from '../../core/services/google-auth.service';
 
 @Component({
   selector: 'app-login',
@@ -53,6 +54,13 @@ import { NgxSpinnerService } from 'ngx-spinner';
             {{ loading ? 'Logging in...' : 'Login' }}
           </button>
         </form>
+
+        <div class="divider"><span>or</span></div>
+
+        <button class="google-btn" type="button" (click)="loginWithGoogle()" [disabled]="googleLoading">
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
+          <span>{{ googleLoading ? 'Redirecting...' : 'Continue with Google' }}</span>
+        </button>
         
         <div class="back-link">
           <a href="/" (click)="goHome($event)">
@@ -61,6 +69,7 @@ import { NgxSpinnerService } from 'ngx-spinner';
         </div>
       </div>
     </div>
+
   `,
   styles: [`
     .login-container {
@@ -78,7 +87,7 @@ import { NgxSpinnerService } from 'ngx-spinner';
       border-radius: 16px;
       box-shadow: 0 20px 40px rgba(0,0,0,0.1);
       width: 100%;
-      max-width: 400px;
+      max-width: 420px;
     }
     
     .login-header {
@@ -100,12 +109,7 @@ import { NgxSpinnerService } from 'ngx-spinner';
     .login-form {
       display: flex;
       flex-direction: column;
-      gap: 1.5rem;
-    }
-    
-    .form-group {
-      display: flex;
-      flex-direction: column;
+      gap: 1.25rem;
     }
     
     .form-group label {
@@ -143,13 +147,49 @@ import { NgxSpinnerService } from 'ngx-spinner';
       gap: 0.5rem;
     }
     
-    .login-btn:hover:not(:disabled) {
-      background: var(--primary-dark);
-    }
-    
     .login-btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
+    }
+    
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin: 1.5rem 0;
+      color: #94a3b8;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #e2e8f0;
+    }
+
+    .google-btn {
+      width: 100%;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: #fff;
+      transition: box-shadow 0.2s ease;
+    }
+
+    .google-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .google-btn:hover:not(:disabled) {
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.1);
     }
     
     .back-link {
@@ -169,6 +209,7 @@ import { NgxSpinnerService } from 'ngx-spinner';
     .back-link a:hover {
       text-decoration: underline;
     }
+
   `]
 })
 export class LoginComponent {
@@ -177,12 +218,14 @@ export class LoginComponent {
     password: ''
   };
   loading = false;
+  googleLoading = false;
 
   constructor(
     private authService: AuthService,
     private router: Router,
     private toastr: ToastrService,
-    private spinner: NgxSpinnerService
+    private spinner: NgxSpinnerService,
+    private googleAuthService: GoogleAuthService
   ) {}
 
   onSubmit() {
@@ -192,7 +235,7 @@ export class LoginComponent {
     this.spinner.show();
 
     this.authService.login(this.loginData).subscribe({
-      next: (response) => {
+      next: () => {
         this.loading = false;
         this.spinner.hide();
         this.toastr.success('Login successful!');
@@ -202,9 +245,15 @@ export class LoginComponent {
         this.loading = false;
         this.spinner.hide();
         console.error('Login error:', error);
-        // Error message is handled by the error interceptor
+        this.toastr.error(error.error?.detail || 'Login failed. Please check your credentials.');
       }
     });
+  }
+
+  loginWithGoogle(): void {
+    if (this.googleLoading) return;
+    this.googleLoading = true;
+    this.googleAuthService.startLogin('admin', '/admin/dashboard');
   }
 
   goHome(event: Event) {

@@ -109,3 +109,5 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'  • Total pincodes now: {Pincode.objects.count()}'))
 
 
+
+

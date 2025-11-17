@@ -9,8 +9,18 @@ class AdminUserSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = AdminUser
-        fields = ['id', 'username', 'email', 'phone', 'is_admin', 'created_at']
-        read_only_fields = ['id', 'created_at']
+        fields = [
+            'id',
+            'username',
+            'email',
+            'phone',
+            'is_admin',
+            'role',
+            'auth_provider',
+            'phone_verified',
+            'created_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'auth_provider']
 
 
 class LoginSerializer(serializers.Serializer):
@@ -62,3 +72,16 @@ class ChangePasswordSerializer(serializers.Serializer):
         if not user.check_password(value):
             raise serializers.ValidationError('Old password is incorrect')
         return value
+
+
+class GoogleAuthSerializer(serializers.Serializer):
+    """Serializer for handling Auth0 Google login"""
+    id_token = serializers.CharField()
+    phone = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    role = serializers.ChoiceField(choices=AdminUser.Roles.choices, default=AdminUser.Roles.CUSTOMER)
+
+    def validate(self, attrs):
+        phone = attrs.get('phone')
+        if phone:
+            attrs['phone'] = phone.strip()
+        return attrs

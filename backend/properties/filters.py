@@ -11,7 +11,7 @@ class PropertyFilter(django_filters.FilterSet):
     search = django_filters.CharFilter(method='filter_search')
     
     # Category and type filters
-    category = django_filters.ChoiceFilter(choices=Property.CATEGORY_CHOICES)
+    category = django_filters.CharFilter(field_name='category', lookup_expr='iexact')
     type = django_filters.ChoiceFilter(choices=Property.TYPE_CHOICES)
     status = django_filters.ChoiceFilter(choices=Property.STATUS_CHOICES)
     

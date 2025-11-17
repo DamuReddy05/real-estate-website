@@ -52,8 +52,8 @@ import { NgxSpinnerService } from 'ngx-spinner';
             </span>
           </div>
           <div class="property-details">
-            <span><i class="fas fa-tag"></i> {{ property.price }}</span>
-            <span><i class="fas fa-ruler-combined"></i> {{ property.area }} sq ft</span>
+            <span><i class="fas fa-tag"></i> ₹{{ formatPrice(property.price) }}</span>
+            <span><i class="fas fa-ruler-combined"></i> {{ property.carpet_area }} sq ft</span>
             <span><i class="fas fa-building"></i> {{ propertyService.getCategoryDisplayName(property.category) }}</span>
             <span><i class="fas fa-eye"></i> {{ property.view_count || 0 }} views</span>
           </div>
@@ -352,6 +352,17 @@ export class PropertiesComponent implements OnInit {
           this.spinner.hide();
         }
       });
+    }
+  }
+
+  formatPrice(price: number): string {
+    if (!price || price === 0) return '0';
+    if (price >= 10000000) {
+      return `${(price / 10000000).toFixed(2)} Cr`;
+    } else if (price >= 100000) {
+      return `${(price / 100000).toFixed(2)} L`;
+    } else {
+      return price.toLocaleString('en-IN');
     }
   }
 }

@@ -1,0 +1,152 @@
+<app-header></app-header>
+
+<ng-container *ngIf="!loadingDashboard; else loadingTemplate">
+  <section class="manage-wrapper">
+    <div class="hero">
+      <div class="hero-text">
+        <p class="eyebrow">Customer Dashboard</p>
+        <h1>{{ welcomeMessage }}</h1>
+        <p>Track your listings, review enquiries, and keep your owner profile verified at all times.</p>
+        <div class="hero-actions">
+          <button class="btn-primary" (click)="startListing()">
+            <i class="fas fa-plus-circle"></i>
+            Post New Property
+          </button>
+          <button class="btn-outline" (click)="viewDrafts()">
+            <i class="fas fa-folder-open"></i>
+            View Drafts
+          </button>
+        </div>
+      </div>
+      <div class="hero-stats" *ngIf="stats">
+        <div class="stat-card">
+          <span class="label">Total Properties</span>
+          <span class="value">{{ stats.total_properties }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="label">Active Listings</span>
+          <span class="value">{{ stats.active_properties }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="label">Pending Phone Approvals</span>
+          <span class="value accent">{{ stats.pending_phone_approval }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="label">Enquiries Sent</span>
+          <span class="value">{{ stats.enquiries_sent }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="content-grid">
+      <div class="dashboard-card properties-card">
+        <div class="card-header">
+          <div>
+            <p class="eyebrow">Listings</p>
+            <h2>My Properties</h2>
+          </div>
+          <button class="btn-outline" (click)="startListing()">
+            <i class="fas fa-plus"></i>
+            Add Property
+          </button>
+        </div>
+        <ng-container *ngIf="myProperties.length; else noProperties">
+          <div class="property-card" *ngFor="let property of myProperties; trackBy: trackByProperty">
+            <div class="property-image" *ngIf="property.primary_image">
+              <img [src]="property.primary_image" [alt]="property.title" />
+            </div>
+            <div class="property-image placeholder" *ngIf="!property.primary_image">
+              <i class="fas fa-home"></i>
+            </div>
+            <div class="property-content">
+              <div class="property-header">
+                <div class="title-section">
+                  <h3>{{ property.title }}</h3>
+                  <p class="location"><i class="fas fa-map-marker-alt"></i> {{ property.location }}, {{ property.city }}</p>
+                </div>
+                <div class="badges">
+                  <span class="badge" [ngClass]="trackStatusClass(property.status)">{{ property.status | titlecase }}</span>
+                  <span class="badge" [ngClass]="getPhoneApprovalClass(property)">{{ getPhoneApprovalLabel(property) }}</span>
+                </div>
+              </div>
+              <div class="property-details">
+                <div class="detail-item" *ngIf="property.bedrooms && property.bedrooms !== 'N/A'">
+                  <i class="fas fa-bed"></i> {{ property.bedrooms }} BHK
+                </div>
+                <div class="detail-item">
+                  <i class="fas fa-ruler-combined"></i> {{ property.carpet_area }} sq ft
+                </div>
+                <div class="detail-item">
+                  <i class="fas fa-rupee-sign"></i> ₹{{ formatPrice(property.price) }}
+                </div>
+                <div class="detail-item">
+                  <i class="fas fa-inbox"></i> {{ property.enquiries_count || 0 }} enquiries
+                </div>
+              </div>
+              <div class="property-actions">
+                <button class="btn-action btn-view" (click)="viewProperty(property)">
+                  <i class="fas fa-eye"></i> View
+                </button>
+                <button class="btn-action btn-edit" (click)="editProperty(property, $event)">
+                  <i class="fas fa-edit"></i> Edit
+                </button>
+                <button class="btn-action btn-delete" (click)="deleteProperty(property, $event)">
+                  <i class="fas fa-trash"></i> Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </ng-container>
+      </div>
+
+      <div class="dashboard-card enquiries-card">
+        <div class="card-header">
+          <div>
+            <p class="eyebrow">Engagement</p>
+            <h2>My Enquiries</h2>
+          </div>
+        </div>
+        <ng-container *ngIf="myEnquiries.length; else noEnquiries">
+          <div class="enquiry-item" *ngFor="let enquiry of myEnquiries; trackBy: trackByEnquiry">
+            <div class="enquiry-head">
+              <div>
+                <h3>{{ enquiry.property_title }}</h3>
+                <small>{{ enquiry.property_location }}</small>
+              </div>
+              <span class="badge" [ngClass]="getEnquiryBadgeClass(enquiry.status)">{{ enquiry.status | titlecase }}</span>
+            </div>
+            <p class="message">{{ enquiry.message || 'No additional message provided.' }}</p>
+            <small class="timestamp">Submitted {{ enquiry.created_at | date:'medium' }}</small>
+          </div>
+        </ng-container>
+      </div>
+    </div>
+  </section>
+</ng-container>
+
+<ng-template #loadingTemplate>
+  <div class="loading-state">
+    <div class="spinner"></div>
+    <p>Loading your dashboard...</p>
+  </div>
+</ng-template>
+
+<ng-template #noProperties>
+  <div class="empty-state">
+    <i class="fas fa-building"></i>
+    <h3>No properties yet</h3>
+    <p>Start by adding your first property. Once published, enquiries will appear here.</p>
+    <button class="btn-primary" (click)="startListing()">
+      <i class="fas fa-plus"></i>
+      Add Property Now
+    </button>
+  </div>
+</ng-template>
+
+<ng-template #noEnquiries>
+  <div class="empty-state compact">
+    <i class="fas fa-comments"></i>
+    <h3>No enquiries yet</h3>
+    <p>Your enquiry history will appear here after you contact property owners.</p>
+  </div>
+</ng-template>

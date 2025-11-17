@@ -1,9 +1,9 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule, Location } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { ContactService } from '../../core/services/contact.service';
-import { CreateContactMessageRequest } from '../../core/models/contact.model';
+import { CreateContactMessageRequest, SiteSettings } from '../../core/models/contact.model';
 import { ToastrService } from 'ngx-toastr';
 import { HeaderComponent } from '../../shared/header/header.component';
 
@@ -103,51 +103,51 @@ import { HeaderComponent } from '../../shared/header/header.component';
           <div class="contact-info-card">
             <h3><i class="fas fa-info-circle"></i> Contact Information</h3>
             <div class="info-items">
-              <div class="info-item">
+              <div class="info-item" *ngIf="siteSettings.contact_address">
                 <div class="info-icon">
                   <i class="fas fa-map-marker-alt"></i>
                 </div>
                 <div class="info-text">
                   <strong>Address</strong>
-                  <span>123 Real Estate Street, Hyderabad, Telangana 500001</span>
+                  <span>{{ siteSettings.contact_address }}</span>
                 </div>
               </div>
-              <div class="info-item">
+              <div class="info-item" *ngIf="siteSettings.contact_phone">
                 <div class="info-icon">
                   <i class="fas fa-phone"></i>
                 </div>
                 <div class="info-text">
                   <strong>Phone</strong>
-                  <span>+91 12345 67890</span>
+                  <span>{{ siteSettings.contact_phone }}</span>
                 </div>
               </div>
-              <div class="info-item">
+              <div class="info-item" *ngIf="siteSettings.contact_email">
                 <div class="info-icon">
                   <i class="fas fa-envelope"></i>
                 </div>
                 <div class="info-text">
                   <strong>Email</strong>
-                  <span>contact&#64;realestatehub.com</span>
+                  <span>{{ siteSettings.contact_email }}</span>
                 </div>
               </div>
-              <div class="info-item">
+              <div class="info-item" *ngIf="siteSettings.working_hours">
                 <div class="info-icon">
                   <i class="fas fa-clock"></i>
                 </div>
                 <div class="info-text">
                   <strong>Working Hours</strong>
-                  <span>Mon - Sat: 9:00 AM - 7:00 PM</span>
+                  <span>{{ siteSettings.working_hours }}</span>
                 </div>
               </div>
             </div>
 
-            <div class="social-links">
+            <div class="social-links" *ngIf="siteSettings.facebook_url || siteSettings.twitter_url || siteSettings.instagram_url || siteSettings.linkedin_url">
               <h4>Follow Us</h4>
               <div class="social-icons">
-                <a href="#" class="social-icon"><i class="fab fa-facebook"></i></a>
-                <a href="#" class="social-icon"><i class="fab fa-twitter"></i></a>
-                <a href="#" class="social-icon"><i class="fab fa-instagram"></i></a>
-                <a href="#" class="social-icon"><i class="fab fa-linkedin"></i></a>
+                <a *ngIf="siteSettings.facebook_url" [href]="siteSettings.facebook_url" target="_blank" rel="noopener noreferrer" class="social-icon"><i class="fab fa-facebook"></i></a>
+                <a *ngIf="siteSettings.twitter_url" [href]="siteSettings.twitter_url" target="_blank" rel="noopener noreferrer" class="social-icon"><i class="fab fa-twitter"></i></a>
+                <a *ngIf="siteSettings.instagram_url" [href]="siteSettings.instagram_url" target="_blank" rel="noopener noreferrer" class="social-icon"><i class="fab fa-instagram"></i></a>
+                <a *ngIf="siteSettings.linkedin_url" [href]="siteSettings.linkedin_url" target="_blank" rel="noopener noreferrer" class="social-icon"><i class="fab fa-linkedin"></i></a>
               </div>
             </div>
           </div>
@@ -528,7 +528,7 @@ import { HeaderComponent } from '../../shared/header/header.component';
     }
   `]
 })
-export class ContactComponent {
+export class ContactComponent implements OnInit {
   formData: CreateContactMessageRequest = {
     name: '',
     email: '',
@@ -537,12 +537,34 @@ export class ContactComponent {
   };
 
   submitting = false;
+  siteSettings: SiteSettings = {};
 
   constructor(
     private contactService: ContactService,
     private toastr: ToastrService,
     private location: Location
   ) {}
+
+  ngOnInit(): void {
+    this.loadSiteSettings();
+  }
+
+  loadSiteSettings(): void {
+    this.contactService.getSiteSettings().subscribe({
+      next: (settings) => {
+        this.siteSettings = settings;
+      },
+      error: () => {
+        // Use defaults if API fails
+        this.siteSettings = {
+          contact_phone: '+91 12345 67890',
+          contact_email: 'contact@realestatehub.com',
+          contact_address: '123 Real Estate Street, Hyderabad, Telangana 500001',
+          working_hours: 'Mon - Sat: 9:00 AM - 7:00 PM'
+        };
+      }
+    });
+  }
 
   submitForm() {
     if (this.submitting) return;

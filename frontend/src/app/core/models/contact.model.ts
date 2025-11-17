@@ -23,3 +23,28 @@ export interface ContactStats {
   replied_messages: number;
   closed_messages: number;
 }
+
+export interface SiteSettings {
+  id?: number;
+  contact_address?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  working_hours?: string;
+  facebook_url?: string;
+  twitter_url?: string;
+  instagram_url?: string;
+  linkedin_url?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SiteSettingsUpdate {
+  contact_address?: string;
+  contact_phone?: string;
+  contact_email?: string;
+  working_hours?: string;
+  facebook_url?: string;
+  twitter_url?: string;
+  instagram_url?: string;
+  linkedin_url?: string;
+}

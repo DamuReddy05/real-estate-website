@@ -2,14 +2,18 @@ from rest_framework import generics, status, filters
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Count
 from django.db import models
 from django.http import JsonResponse
-from .models import Property, PropertyImage
+from django.shortcuts import get_object_or_404
+from .models import Property, PropertyImage, PropertyEnquiry, Tag, Category, SubCategory, City, Pincode, Amenity
 from .serializers import (
     PropertySerializer, PropertyListSerializer, PropertyCreateUpdateSerializer,
-    PropertyImageSerializer, PropertyStatsSerializer
+    PropertyImageSerializer, PropertyStatsSerializer, PropertyEnquirySerializer,
+    TagSerializer, CategorySerializer, SubCategorySerializer,
+    CityAdminSerializer, PincodeAdminSerializer, CityPublicSerializer, AmenitySerializer
 )
 from .filters import PropertyFilter
 
@@ -26,7 +30,7 @@ class PropertyListView(generics.ListAPIView):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        return Property.objects.filter(status='active').select_related('created_by').prefetch_related('images')
+        return Property.objects.filter(status='active').select_related('created_by').prefetch_related('images', 'enquiries', 'tags')
 
 
 class PropertyDetailView(generics.RetrieveAPIView):
@@ -34,7 +38,7 @@ class PropertyDetailView(generics.RetrieveAPIView):
     permission_classes = [AllowAny]
     authentication_classes = []  # Disable authentication for public property detail
     serializer_class = PropertySerializer
-    queryset = Property.objects.filter(status='active').select_related('created_by').prefetch_related('images')
+    queryset = Property.objects.filter(status='active').select_related('created_by').prefetch_related('images', 'enquiries', 'tags')
 
 
 class PropertyCreateView(generics.CreateAPIView):
@@ -70,14 +74,225 @@ class AdminPropertyListView(generics.ListAPIView):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        return Property.objects.all().select_related('created_by').prefetch_related('images')
+        return Property.objects.all().select_related('created_by').prefetch_related('images', 'enquiries', 'tags')
 
 
 class AdminPropertyDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Admin property detail view with full CRUD"""
     permission_classes = [IsAuthenticated]
     serializer_class = PropertySerializer
-    queryset = Property.objects.all().select_related('created_by').prefetch_related('images')
+    queryset = Property.objects.all().select_related('created_by').prefetch_related('images', 'enquiries', 'tags')
+
+
+class CustomerPropertyListView(generics.ListAPIView):
+    """List properties created by the logged-in customer"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = PropertyListSerializer
+
+    def get_queryset(self):
+        return Property.objects.filter(created_by=self.request.user).prefetch_related('images', 'enquiries', 'tags')
+
+
+class CustomerPropertyCreateView(generics.CreateAPIView):
+    """Create new property (customer endpoint)"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = PropertyCreateUpdateSerializer
+    
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+
+class CustomerPropertyDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Customer property detail view with full CRUD"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = PropertySerializer
+    
+    def get_queryset(self):
+        # Only allow customers to access their own properties
+        return Property.objects.filter(created_by=self.request.user).select_related('created_by').prefetch_related('images', 'enquiries', 'tags')
+
+
+class CustomerEnquiryListView(generics.ListAPIView):
+    """List enquiries created by the customer"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = PropertyEnquirySerializer
+
+    def get_queryset(self):
+        return PropertyEnquiry.objects.filter(user=self.request.user).select_related('property', 'property__created_by').prefetch_related('property__images')
+
+
+class CustomerPropertyStatsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        properties = Property.objects.filter(created_by=request.user)
+        stats = {
+            'total_properties': properties.count(),
+            'active_properties': properties.filter(status='active').count(),
+            'inactive_properties': properties.exclude(status='active').count(),
+            'pending_phone_approval': properties.filter(is_phone_approved=False).count(),
+            'enquiries_received': PropertyEnquiry.objects.filter(property__created_by=request.user).count(),
+            'enquiries_sent': PropertyEnquiry.objects.filter(user=request.user).count(),
+        }
+        return Response(stats)
+
+
+class PropertyEnquiryCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, property_id):
+        property_obj = get_object_or_404(Property, pk=property_id, status='active')
+        if property_obj.created_by == request.user:
+            return Response({'detail': 'You cannot enquire about your own property.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        name = request.data.get('name') or request.user.first_name or request.user.username
+        email = request.data.get('email') or request.user.email
+        phone = request.data.get('phone') or getattr(request.user, 'phone', None)
+        message = request.data.get('message', '')
+
+        if not phone:
+            return Response({'detail': 'Phone number is required to contact owner.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        enquiry = PropertyEnquiry.objects.create(
+            property=property_obj,
+            user=request.user,
+            name=name,
+            email=email,
+            phone=phone,
+            message=message
+        )
+        serializer = PropertyEnquirySerializer(enquiry, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class TagListView(generics.ListAPIView):
+    """Public endpoint to list active tags"""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    serializer_class = TagSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return Tag.objects.filter(is_active=True).order_by('name')
+
+
+class TagAdminListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = TagSerializer
+    queryset = Tag.objects.all().order_by('name')
+    pagination_class = None
+
+
+class TagAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = TagSerializer
+    queryset = Tag.objects.all()
+
+
+class AmenityListView(generics.ListAPIView):
+    """List all active amenities (public)"""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    serializer_class = AmenitySerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return Amenity.objects.filter(is_active=True).order_by('priority', 'name')
+
+
+class AmenityAdminListCreateView(generics.ListCreateAPIView):
+    """Admin: List and create amenities"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = AmenitySerializer
+    queryset = Amenity.objects.all().order_by('priority', 'name')
+    pagination_class = None
+
+
+class AmenityAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Admin: Amenity detail view"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = AmenitySerializer
+    queryset = Amenity.objects.all()
+
+
+class CityAdminListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CityAdminSerializer
+    queryset = City.objects.all().order_by('name')
+    pagination_class = None
+
+
+class CityAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CityAdminSerializer
+    queryset = City.objects.all()
+
+
+class PincodeAdminListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PincodeAdminSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = Pincode.objects.all().order_by('pincode')
+        city_id = self.request.query_params.get('city')
+        if city_id:
+            city = City.objects.filter(pk=city_id).first()
+            if city:
+                qs = qs.filter(city__iexact=city.name)
+        return qs
+
+
+class PincodeAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PincodeAdminSerializer
+    queryset = Pincode.objects.all()
+    pagination_class = None
+
+
+class CategoryListView(generics.ListAPIView):
+    """Public endpoint to list categories with subcategories"""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    serializer_class = CategorySerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return Category.objects.filter(is_active=True).prefetch_related('subcategories').order_by('priority', 'name')
+
+
+class CategoryAdminListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CategorySerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return Category.objects.all().prefetch_related('subcategories').order_by('priority', 'name')
+
+
+class CategoryAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = CategorySerializer
+    queryset = Category.objects.all()
+
+
+class SubCategoryAdminListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SubCategorySerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        qs = SubCategory.objects.select_related('category').order_by('category__name', 'priority', 'name')
+        category_id = self.request.query_params.get('category')
+        if category_id:
+            qs = qs.filter(category_id=category_id)
+        return qs
+
+
+class SubCategoryAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SubCategorySerializer
+    queryset = SubCategory.objects.all()
 
 
 @api_view(['GET'])
@@ -146,6 +361,13 @@ def upload_property_image(request, property_id):
                 'error': 'Property not found',
                 'message': f'Property with ID {property_id} does not exist.'
             }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if user owns the property (for customers) or is admin
+        if not (property_obj.created_by == request.user or getattr(request.user, 'is_admin', False) or getattr(request.user, 'is_staff', False)):
+            return Response({
+                'error': 'Permission denied',
+                'message': 'You can only upload images for your own properties.'
+            }, status=status.HTTP_403_FORBIDDEN)
         
         # Validate image file
         if 'image' not in request.FILES:
@@ -415,20 +637,9 @@ def search_properties(request):
 @permission_classes([AllowAny])
 def get_cities(request):
     """Get all active cities from City model"""
-    from .models import City
-    
     cities = City.objects.filter(is_active=True).order_by('name')
-    cities_with_count = []
-    
-    for city in cities:
-        count = Property.objects.filter(status='active', city=city.name).count()
-        cities_with_count.append({
-            'city': city.name,
-            'state': city.state,
-            'count': count
-        })
-    
-    return Response(cities_with_count)
+    serializer = CityPublicSerializer(cities, many=True)
+    return Response(serializer.data)
 
 
 @api_view(['GET'])

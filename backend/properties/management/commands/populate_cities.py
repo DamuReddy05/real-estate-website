@@ -93,3 +93,5 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'  • Total cities now: {City.objects.count()}'))
 
 
+
+

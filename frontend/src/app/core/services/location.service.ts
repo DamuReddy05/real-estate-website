@@ -5,7 +5,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
   providedIn: 'root'
 })
 export class LocationService {
-  private selectedCitySubject = new BehaviorSubject<string>('Hyderabad');
+  private selectedCitySubject = new BehaviorSubject<string>('Ananthapur');
   public selectedCity$ = this.selectedCitySubject.asObservable();
 
   constructor() {
@@ -26,9 +26,11 @@ export class LocationService {
   }
 
   clearCity(): void {
-    this.selectedCitySubject.next('Hyderabad');
+    this.selectedCitySubject.next('Ananthapur');
     localStorage.removeItem('selectedCity');
   }
 }
+
+
 
 

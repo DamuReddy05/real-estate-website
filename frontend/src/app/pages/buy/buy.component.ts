@@ -328,10 +328,10 @@ import { PropertyDetailComponent } from '../property-detail/property-detail.comp
               <div class="specs">
                 <span class="spec" *ngIf="property.bedrooms"><i class="fas fa-bed"></i> {{ property.bedrooms }} BHK</span>
                 <span class="spec" *ngIf="property.bedrooms"><i class="fas fa-bath"></i> {{ property.bathrooms }}</span>
-                <span class="spec"><i class="fas fa-vector-square"></i> {{ property.area }} sq ft</span>
+                <span class="spec"><i class="fas fa-vector-square"></i> {{ property.carpet_area }} sq ft</span>
               </div>
               <div class="price-row">
-                <div class="price">{{ property.price }}</div>
+                <div class="price">₹{{ formatPrice(property.price) }}</div>
                 <button class="btn-view" (click)="viewProperty(property.id)">
                   View <i class="fas fa-arrow-right"></i>
                 </button>
@@ -2178,9 +2178,9 @@ export class BuyComponent implements OnInit, OnDestroy {
     const filters = this.buildFilters();
     
     this.propertyService.getProperties(filters).subscribe({
-      next: (response: any) => {
-        const properties = response.results || response;
-        const count = response.count || properties.length;
+      next: (response) => {
+        const properties = (response && response.results) ? response.results : [];
+        const count = (response && typeof response.count === 'number') ? response.count : properties.length;
         
         if (resetList) {
           this.filteredProperties = properties;
@@ -2197,6 +2197,11 @@ export class BuyComponent implements OnInit, OnDestroy {
       },
       error: (error) => {
         console.error('Failed to load properties:', error);
+        if (!resetList && error?.status === 404) {
+          // We've reached beyond the last page – stop requesting more
+          this.hasMore = false;
+          this.currentPage = Math.max(this.currentPage - 1, 1);
+        }
         this.loading = false;
         this.loadingMore = false;
       }
@@ -2365,7 +2370,7 @@ export class BuyComponent implements OnInit, OnDestroy {
     this.selectedPropertyId = null;
   }
 
-  getPropertyIcon(category: string): string {
+  getPropertyIcon(category?: string): string {
     const icons: any = {
       flat: '🏢',
       house: '🏠',
@@ -2374,10 +2379,13 @@ export class BuyComponent implements OnInit, OnDestroy {
       commercial: '🏬',
       penthouse: '🌆'
     };
+    if (!category) {
+      return '🏠';
+    }
     return icons[category] || '🏠';
   }
 
-  getCategoryName(category: string): string {
+  getCategoryName(category?: string): string {
     const names: any = {
       flat: 'Apartment',
       house: 'House',
@@ -2386,6 +2394,9 @@ export class BuyComponent implements OnInit, OnDestroy {
       commercial: 'Commercial',
       penthouse: 'Penthouse'
     };
+    if (!category) {
+      return 'General';
+    }
     return names[category] || category;
   }
 
@@ -2422,6 +2433,17 @@ export class BuyComponent implements OnInit, OnDestroy {
 
   goToImage(propertyIndex: number, imageIndex: number): void {
     this.propertyImageIndices[propertyIndex] = imageIndex;
+  }
+
+  formatPrice(price: number): string {
+    if (!price || price === 0) return '0';
+    if (price >= 10000000) {
+      return `${(price / 10000000).toFixed(2)} Cr`;
+    } else if (price >= 100000) {
+      return `${(price / 100000).toFixed(2)} L`;
+    } else {
+      return price.toLocaleString('en-IN');
+    }
   }
 }
 
