@@ -8,4 +8,9 @@ urlpatterns = [
     path('profile/', views.UserProfileView.as_view(), name='user_profile'),
     path('change-password/', views.ChangePasswordView.as_view(), name='change_password'),
     path('user-info/', views.user_info, name='user_info'),
+    
+    # Admin user management
+    path('admin/users/', views.UserListView.as_view(), name='admin_user_list'),
+    path('admin/users/<int:pk>/', views.UserDetailView.as_view(), name='admin_user_detail'),
+    path('admin/users/<int:pk>/toggle-status/', views.UserToggleStatusView.as_view(), name='admin_user_toggle_status'),
 ]

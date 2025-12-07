@@ -4,6 +4,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters import rest_framework as filters
+from accounts.permissions import IsAdminUser
 from .models import ContactMessage, SiteSettings
 from .serializers import (
     ContactMessageSerializer, ContactMessageCreateSerializer,
@@ -31,7 +32,7 @@ class ContactMessageCreateView(generics.CreateAPIView):
 
 class ContactMessageListView(generics.ListAPIView):
     """List contact messages (admin only)"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = ContactMessageSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['status']
@@ -43,13 +44,13 @@ class ContactMessageListView(generics.ListAPIView):
 
 class ContactMessageDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Contact message detail view (admin only)"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = ContactMessageSerializer
     queryset = ContactMessage.objects.all()
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])
 def contact_stats(request):
     """Get contact message statistics"""
     stats = {
@@ -72,7 +73,7 @@ def get_site_settings(request):
 
 
 @api_view(['GET', 'PUT'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])
 def admin_site_settings(request):
     """Get or update site settings (admin only)"""
     settings = SiteSettings.load()

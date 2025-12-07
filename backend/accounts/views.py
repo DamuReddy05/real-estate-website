@@ -7,6 +7,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth import login
 from django.db import transaction
+from django.db.models import Q
 from .models import AdminUser
 from .serializers import (
     AdminUserSerializer,
@@ -15,6 +16,7 @@ from .serializers import (
     GoogleAuthSerializer
 )
 from .auth0 import verify_auth0_token
+from accounts.permissions import IsAdminUser
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +41,19 @@ class LoginView(generics.GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
+        
+        # Check if user is active
+        if not user.is_active:
+            from contact.models import SiteSettings
+            site_settings = SiteSettings.load()
+            return Response({
+                'detail': 'Your account has been deactivated. Please contact the administrator to reactivate your account.',
+                'admin_contact': {
+                    'email': site_settings.contact_email,
+                    'phone': site_settings.contact_phone
+                },
+                'code': 'account_inactive'
+            }, status=status.HTTP_403_FORBIDDEN)
         
         # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
@@ -174,9 +189,72 @@ class GoogleAuthView(generics.GenericAPIView):
                 else:
                     user.save(update_fields=list(update_fields))
 
+        # Check if user is active after save
+        if not user.is_active:
+            from contact.models import SiteSettings
+            site_settings = SiteSettings.load()
+            return Response({
+                'detail': 'Your account has been deactivated. Please contact the administrator to reactivate your account.',
+                'admin_contact': {
+                    'email': site_settings.contact_email,
+                    'phone': site_settings.contact_phone
+                },
+                'code': 'account_inactive'
+            }, status=status.HTTP_403_FORBIDDEN)
+
         refresh = RefreshToken.for_user(user)
         return Response({
             'access': str(refresh.access_token),
             'refresh': str(refresh),
             'user': AdminUserSerializer(user).data
         }, status=status.HTTP_200_OK)
+
+
+class UserListView(generics.ListAPIView):
+    """List all users (admin only)"""
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminUserSerializer
+    pagination_class = None  # Disable pagination for user list
+    
+    def get_queryset(self):
+        queryset = AdminUser.objects.all().order_by('-created_at')
+        
+        # Filter by role
+        role = self.request.query_params.get('role', None)
+        if role:
+            queryset = queryset.filter(role=role)
+        
+        # Filter by search query
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(
+                Q(username__icontains=search) |
+                Q(email__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(phone__icontains=search)
+            )
+        
+        return queryset
+
+
+class UserDetailView(generics.RetrieveUpdateAPIView):
+    """User detail view (admin only)"""
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminUserSerializer
+    queryset = AdminUser.objects.all()
+
+
+class UserToggleStatusView(generics.GenericAPIView):
+    """Toggle user active status (admin only)"""
+    permission_classes = [IsAdminUser]
+    
+    def post(self, request, pk):
+        try:
+            user = AdminUser.objects.get(pk=pk)
+            user.is_active = not user.is_active
+            user.save()
+            serializer = AdminUserSerializer(user)
+            return Response(serializer.data)
+        except AdminUser.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)

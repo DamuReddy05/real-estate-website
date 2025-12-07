@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Property, PropertyImage, PropertyEnquiry, Tag, Category, SubCategory, City, Pincode, Amenity
+from .models import Property, PropertyImage, PropertyEnquiry, Tag, Category, SubCategory, City, Pincode, Amenity, Banner
 
 
 class TagSerializer(serializers.ModelSerializer):
@@ -53,7 +53,7 @@ class PincodeAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = Pincode
         fields = [
-            'id', 'pincode', 'city_ref', 'city_id', 'city', 'state',
+            'id', 'pincode', 'city_ref', 'city_id', 'city',
             'area', 'is_active', 'created_at', 'updated_at'
         ]
         read_only_fields = ['city_id', 'city', 'created_at', 'updated_at']
@@ -123,7 +123,7 @@ class PropertySerializer(serializers.ModelSerializer):
     images = PropertyImageSerializer(many=True, read_only=True)
     created_by_name = serializers.CharField(source='created_by.username', read_only=True)
     amenities_list = serializers.ReadOnlyField()
-    amenities = AmenitySerializer(many=True, read_only=True)
+    amenities = serializers.SerializerMethodField()
     tags = TagSerializer(many=True, read_only=True)
     owner_phone_masked = serializers.SerializerMethodField()
     
@@ -147,20 +147,54 @@ class PropertySerializer(serializers.ModelSerializer):
     def get_owner_phone_masked(self, obj):
         return obj.masked_owner_phone
 
+    def get_amenities(self, obj):
+        """Explicitly get amenities, using prefetched if available"""
+        # Check if amenities are prefetched
+        if hasattr(obj, '_prefetched_objects_cache') and 'amenities' in obj._prefetched_objects_cache:
+            amenities = obj._prefetched_objects_cache['amenities']
+        else:
+            # Fallback to querying if not prefetched
+            amenities = obj.amenities.all()
+        
+        # Filter to only active amenities and order by priority
+        amenities = amenities.filter(is_active=True).order_by('-priority', 'name')
+        
+        # Serialize the amenities
+        return AmenitySerializer(amenities, many=True).data
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         request = self.context.get('request')
         user = getattr(request, 'user', None) if request else None
-        data['owner_phone'] = instance.owner_phone_display(user)
-        if instance.owner_phone and (
-            instance.is_phone_approved or (
-                user and getattr(user, 'is_authenticated', False) and
-                (user == instance.created_by or getattr(user, 'is_admin', False) or getattr(user, 'is_staff', False))
-            )
-        ):
-            data['owner_phone_full'] = instance.owner_phone
-        else:
+        
+        # Check if user is admin or the property owner
+        is_admin = getattr(user, 'is_admin', False) if user else False
+        is_owner = user == instance.created_by if user else False
+        
+        # For customers (non-admin, non-owner), hide owner contact info and show admin contact
+        if user and not is_admin and not is_owner:
+            # Hide owner phone and email from customers
+            data['owner_phone'] = None
+            data['owner_email'] = None
             data['owner_phone_full'] = None
+            
+            # Show admin contact info instead
+            from contact.models import SiteSettings
+            site_settings = SiteSettings.load()
+            data['admin_contact_phone'] = site_settings.contact_phone
+            data['admin_contact_email'] = site_settings.contact_email
+        else:
+            # For admins and property owners, show full owner info
+            data['owner_phone'] = instance.owner_phone_display(user)
+            if instance.owner_phone and (
+                instance.is_phone_approved or is_admin or is_owner
+            ):
+                data['owner_phone_full'] = instance.owner_phone
+            else:
+                data['owner_phone_full'] = None
+            data['admin_contact_phone'] = None
+            data['admin_contact_email'] = None
+        
         return data
 
 
@@ -221,7 +255,17 @@ class PropertyListSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         request = self.context.get('request')
         user = getattr(request, 'user', None) if request else None
-        data['owner_phone'] = instance.owner_phone_display(user)
+        
+        # Check if user is admin or the property owner
+        is_admin = getattr(user, 'is_admin', False) if user else False
+        is_owner = user == instance.created_by if user else False
+        
+        # For customers (non-admin, non-owner), hide owner contact info
+        if user and not is_admin and not is_owner:
+            data['owner_phone'] = None
+        else:
+            data['owner_phone'] = instance.owner_phone_display(user)
+        
         return data
 
 
@@ -270,11 +314,25 @@ class PropertyCreateUpdateSerializer(serializers.ModelSerializer):
                 })
 
         if city_name and pincode:
-            if not Pincode.objects.filter(city__iexact=city_name, pincode=pincode, is_active=True).exists():
-                raise serializers.ValidationError({
-                    'pincode': [f"Pincode {pincode} is not enabled for {city_name} yet."],
-                    'error_code': 'pincode_not_allowed'
-                })
+            # Check if pincode exists for this city
+            pincode_exists = Pincode.objects.filter(city__iexact=city_name, pincode=pincode, is_active=True).exists()
+            
+            # If pincode doesn't exist, only warn but allow for customers
+            # Admin properties should have valid pincodes
+            user = self.context.get('request').user if self.context.get('request') else None
+            is_admin = getattr(user, 'is_admin', False) if user else False
+            
+            if not pincode_exists:
+                if is_admin:
+                    # Admins should use valid pincodes
+                    raise serializers.ValidationError({
+                        'pincode': [f"Pincode {pincode} is not enabled for {city_name} yet. Please add it in the admin panel first."],
+                        'error_code': 'pincode_not_allowed'
+                    })
+                else:
+                    # For customers, allow but log a warning
+                    # The pincode will be saved, but admin should verify it later
+                    pass
 
         return attrs
 
@@ -318,13 +376,19 @@ class PropertyEnquirySerializer(serializers.ModelSerializer):
     property_title = serializers.CharField(source='property.title', read_only=True)
     property_location = serializers.CharField(source='property.location', read_only=True)
     property_primary_image = serializers.SerializerMethodField()
+    enquiry_type = serializers.SerializerMethodField()
 
     class Meta:
         model = PropertyEnquiry
         fields = [
             'id', 'property', 'property_title', 'property_location', 'property_primary_image',
-            'status', 'message', 'created_at', 'updated_at'
+            'status', 'message', 'name', 'email', 'phone', 'user', 'created_at', 'updated_at',
+            'enquiry_type'
         ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_enquiry_type(self, obj):
+        return 'property_enquiry'
 
     def get_property_primary_image(self, obj):
         primary_image = obj.property.images.filter(is_primary=True).first()
@@ -334,3 +398,37 @@ class PropertyEnquirySerializer(serializers.ModelSerializer):
         if first_image:
             return first_image.get_image_source()
         return None
+
+
+class BannerSerializer(serializers.ModelSerializer):
+    """Serializer for Banner model"""
+    image_source = serializers.SerializerMethodField()
+    is_currently_active = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Banner
+        fields = [
+            'id', 'name', 'banner_type', 'image', 'image_url', 'link_url',
+            'title', 'description', 'is_active', 'priority',
+            'start_date', 'end_date', 'created_at', 'updated_at',
+            'image_source', 'is_currently_active'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_image_source(self, obj):
+        """Return full image URL for the frontend"""
+        image_source = obj.get_image_source()
+        if image_source:
+            # If it's already a full URL, return as is
+            if image_source.startswith('http://') or image_source.startswith('https://'):
+                return image_source
+            # If it's a relative URL, make it absolute using request
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(image_source)
+            # Fallback: return as is (will need frontend to prepend API URL)
+            return image_source
+        return None
+    
+    def get_is_currently_active(self, obj):
+        return obj.is_currently_active()

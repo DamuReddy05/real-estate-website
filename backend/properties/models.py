@@ -1,6 +1,6 @@
 from django.db import models
 from django.contrib.auth import get_user_model
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator, URLValidator
 from django.utils.text import slugify
 
 User = get_user_model()
@@ -291,3 +291,55 @@ class PropertyEnquiry(models.Model):
 
     def __str__(self):
         return f"Enquiry #{self.id} - {self.property.title}"
+
+
+class Banner(models.Model):
+    """Model for managing advertisable banners"""
+    
+    BANNER_TYPE_CHOICES = [
+        ('main_banner', 'Main Banner'),
+        ('buy_banner', 'Buy Banner'),
+        ('rent_banner', 'Rent Banner'),
+    ]
+    
+    name = models.CharField(max_length=200, help_text="Internal name for this banner")
+    banner_type = models.CharField(max_length=20, choices=BANNER_TYPE_CHOICES, help_text="Where this banner will be displayed")
+    image = models.ImageField(upload_to='banners/', blank=True, null=True, help_text="Banner image file")
+    image_url = models.URLField(max_length=500, blank=True, null=True, validators=[URLValidator()], help_text="External image URL (alternative to upload)")
+    link_url = models.URLField(max_length=500, blank=True, null=True, validators=[URLValidator()], help_text="URL to navigate when banner is clicked")
+    title = models.CharField(max_length=200, blank=True, null=True, help_text="Optional banner title/text overlay")
+    description = models.TextField(blank=True, null=True, help_text="Optional banner description")
+    is_active = models.BooleanField(default=True)
+    priority = models.IntegerField(default=0, help_text="Higher priority banners appear first")
+    start_date = models.DateTimeField(blank=True, null=True, help_text="Optional: Start date for banner display")
+    end_date = models.DateTimeField(blank=True, null=True, help_text="Optional: End date for banner display")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'banners'
+        ordering = ['-priority', '-created_at']
+        verbose_name_plural = 'Banners'
+    
+    def __str__(self):
+        return f"{self.name} ({self.get_banner_type_display()})"
+    
+    def get_image_source(self):
+        """Return image URL or uploaded image URL"""
+        if self.image_url:
+            return self.image_url
+        elif self.image:
+            return self.image.url
+        return None
+    
+    def is_currently_active(self):
+        """Check if banner should be displayed based on dates"""
+        from django.utils import timezone
+        now = timezone.now()
+        if not self.is_active:
+            return False
+        if self.start_date and now < self.start_date:
+            return False
+        if self.end_date and now > self.end_date:
+            return False
+        return True

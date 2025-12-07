@@ -18,10 +18,11 @@ class PropertyFilter(django_filters.FilterSet):
     # Location filters
     city = django_filters.CharFilter(field_name='city', lookup_expr='icontains')
     state = django_filters.CharFilter(field_name='state', lookup_expr='icontains')
+    pincode = django_filters.CharFilter(field_name='pincode', lookup_expr='exact')
     
     # Numeric filters
-    min_area = django_filters.NumberFilter(field_name='area', lookup_expr='gte')
-    max_area = django_filters.NumberFilter(field_name='area', lookup_expr='lte')
+    min_area = django_filters.NumberFilter(field_name='carpet_area', lookup_expr='gte')
+    max_area = django_filters.NumberFilter(field_name='carpet_area', lookup_expr='lte')
     
     # Price filters (custom methods for string-based prices)
     min_price = django_filters.NumberFilter(method='filter_min_price')
@@ -33,7 +34,7 @@ class PropertyFilter(django_filters.FilterSet):
     
     class Meta:
         model = Property
-        fields = ['category', 'type', 'status', 'city', 'state', 'bedrooms', 'bathrooms']
+        fields = ['category', 'type', 'status', 'city', 'state', 'pincode', 'bedrooms', 'bathrooms']
     
     def filter_search(self, queryset, name, value):
         """Custom search filter"""
@@ -42,8 +43,9 @@ class PropertyFilter(django_filters.FilterSet):
                 Q(title__icontains=value) |
                 Q(location__icontains=value) |
                 Q(city__icontains=value) |
-                Q(description__icontains=value) |
-                Q(amenities__icontains=value)
+                Q(state__icontains=value) |
+                Q(pincode__icontains=value) |
+                Q(description__icontains=value)
             )
         return queryset
     

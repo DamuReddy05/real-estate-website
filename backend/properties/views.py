@@ -8,12 +8,13 @@ from django.db.models import Q, Count
 from django.db import models
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
-from .models import Property, PropertyImage, PropertyEnquiry, Tag, Category, SubCategory, City, Pincode, Amenity
+from accounts.permissions import IsAdminUser
+from .models import Property, PropertyImage, PropertyEnquiry, Tag, Category, SubCategory, City, Pincode, Amenity, Banner
 from .serializers import (
     PropertySerializer, PropertyListSerializer, PropertyCreateUpdateSerializer,
     PropertyImageSerializer, PropertyStatsSerializer, PropertyEnquirySerializer,
     TagSerializer, CategorySerializer, SubCategorySerializer,
-    CityAdminSerializer, PincodeAdminSerializer, CityPublicSerializer, AmenitySerializer
+    CityAdminSerializer, PincodeAdminSerializer, CityPublicSerializer, AmenitySerializer, BannerSerializer
 )
 from .filters import PropertyFilter
 
@@ -30,7 +31,7 @@ class PropertyListView(generics.ListAPIView):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        return Property.objects.filter(status='active').select_related('created_by').prefetch_related('images', 'enquiries', 'tags')
+        return Property.objects.filter(status='active').select_related('created_by').prefetch_related('images', 'enquiries', 'tags', 'amenities')
 
 
 class PropertyDetailView(generics.RetrieveAPIView):
@@ -38,7 +39,7 @@ class PropertyDetailView(generics.RetrieveAPIView):
     permission_classes = [AllowAny]
     authentication_classes = []  # Disable authentication for public property detail
     serializer_class = PropertySerializer
-    queryset = Property.objects.filter(status='active').select_related('created_by').prefetch_related('images', 'enquiries', 'tags')
+    queryset = Property.objects.filter(status='active').select_related('created_by').prefetch_related('images', 'enquiries', 'tags', 'amenities')
 
 
 class PropertyCreateView(generics.CreateAPIView):
@@ -65,7 +66,7 @@ class PropertyDeleteView(generics.DestroyAPIView):
 
 class AdminPropertyListView(generics.ListAPIView):
     """List all properties for admin (including inactive)"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = PropertySerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = PropertyFilter
@@ -74,14 +75,14 @@ class AdminPropertyListView(generics.ListAPIView):
     ordering = ['-created_at']
     
     def get_queryset(self):
-        return Property.objects.all().select_related('created_by').prefetch_related('images', 'enquiries', 'tags')
+        return Property.objects.all().select_related('created_by').prefetch_related('images', 'enquiries', 'tags', 'amenities')
 
 
 class AdminPropertyDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Admin property detail view with full CRUD"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = PropertySerializer
-    queryset = Property.objects.all().select_related('created_by').prefetch_related('images', 'enquiries', 'tags')
+    queryset = Property.objects.all().select_related('created_by').prefetch_related('images', 'enquiries', 'tags', 'amenities')
 
 
 class CustomerPropertyListView(generics.ListAPIView):
@@ -90,7 +91,7 @@ class CustomerPropertyListView(generics.ListAPIView):
     serializer_class = PropertyListSerializer
 
     def get_queryset(self):
-        return Property.objects.filter(created_by=self.request.user).prefetch_related('images', 'enquiries', 'tags')
+        return Property.objects.filter(created_by=self.request.user).prefetch_related('images', 'enquiries', 'tags', 'amenities')
 
 
 class CustomerPropertyCreateView(generics.CreateAPIView):
@@ -109,7 +110,7 @@ class CustomerPropertyDetailView(generics.RetrieveUpdateDestroyAPIView):
     
     def get_queryset(self):
         # Only allow customers to access their own properties
-        return Property.objects.filter(created_by=self.request.user).select_related('created_by').prefetch_related('images', 'enquiries', 'tags')
+        return Property.objects.filter(created_by=self.request.user).select_related('created_by').prefetch_related('images', 'enquiries', 'tags', 'amenities')
 
 
 class CustomerEnquiryListView(generics.ListAPIView):
@@ -119,6 +120,23 @@ class CustomerEnquiryListView(generics.ListAPIView):
 
     def get_queryset(self):
         return PropertyEnquiry.objects.filter(user=self.request.user).select_related('property', 'property__created_by').prefetch_related('property__images')
+
+
+class AdminPropertyEnquiryListView(generics.ListAPIView):
+    """Admin: List all property enquiries"""
+    permission_classes = [IsAdminUser]
+    serializer_class = PropertyEnquirySerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return PropertyEnquiry.objects.all().select_related('property', 'user', 'property__created_by').order_by('-created_at')
+
+
+class AdminPropertyEnquiryDetailView(generics.RetrieveUpdateAPIView):
+    """Admin: Update property enquiry status"""
+    permission_classes = [IsAdminUser]
+    serializer_class = PropertyEnquirySerializer
+    queryset = PropertyEnquiry.objects.all()
 
 
 class CustomerPropertyStatsView(APIView):
@@ -177,14 +195,14 @@ class TagListView(generics.ListAPIView):
 
 
 class TagAdminListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = TagSerializer
     queryset = Tag.objects.all().order_by('name')
     pagination_class = None
 
 
 class TagAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = TagSerializer
     queryset = Tag.objects.all()
 
@@ -202,7 +220,7 @@ class AmenityListView(generics.ListAPIView):
 
 class AmenityAdminListCreateView(generics.ListCreateAPIView):
     """Admin: List and create amenities"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = AmenitySerializer
     queryset = Amenity.objects.all().order_by('priority', 'name')
     pagination_class = None
@@ -210,26 +228,26 @@ class AmenityAdminListCreateView(generics.ListCreateAPIView):
 
 class AmenityAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Admin: Amenity detail view"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = AmenitySerializer
     queryset = Amenity.objects.all()
 
 
 class CityAdminListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = CityAdminSerializer
     queryset = City.objects.all().order_by('name')
     pagination_class = None
 
 
 class CityAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = CityAdminSerializer
     queryset = City.objects.all()
 
 
 class PincodeAdminListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = PincodeAdminSerializer
     pagination_class = None
 
@@ -244,7 +262,7 @@ class PincodeAdminListCreateView(generics.ListCreateAPIView):
 
 
 class PincodeAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = PincodeAdminSerializer
     queryset = Pincode.objects.all()
     pagination_class = None
@@ -262,7 +280,7 @@ class CategoryListView(generics.ListAPIView):
 
 
 class CategoryAdminListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = CategorySerializer
     pagination_class = None
 
@@ -271,13 +289,13 @@ class CategoryAdminListCreateView(generics.ListCreateAPIView):
 
 
 class CategoryAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = CategorySerializer
     queryset = Category.objects.all()
 
 
 class SubCategoryAdminListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = SubCategorySerializer
     pagination_class = None
 
@@ -290,13 +308,13 @@ class SubCategoryAdminListCreateView(generics.ListCreateAPIView):
 
 
 class SubCategoryAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminUser]
     serializer_class = SubCategorySerializer
     queryset = SubCategory.objects.all()
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])
 def property_stats(request):
     """Get property statistics for dashboard"""
     stats = {
@@ -329,7 +347,7 @@ def property_stats(request):
 
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAdminUser])
 def toggle_property_status(request, pk):
     """Toggle property status between active and inactive"""
     try:
@@ -676,3 +694,42 @@ def track_property_view(request, pk):
         return Response({'view_count': property_obj.view_count}, status=status.HTTP_200_OK)
     except Property.DoesNotExist:
         return Response({'error': 'Property not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+# Banner Views
+class BannerListView(generics.ListAPIView):
+    """List banners by type (public endpoint)"""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    serializer_class = BannerSerializer
+    
+    def get_queryset(self):
+        banner_type = self.request.query_params.get('type', None)
+        queryset = Banner.objects.filter(is_active=True)
+        
+        # Filter by date range
+        from django.utils import timezone
+        now = timezone.now()
+        queryset = queryset.filter(
+            Q(start_date__isnull=True) | Q(start_date__lte=now),
+            Q(end_date__isnull=True) | Q(end_date__gte=now)
+        )
+        
+        if banner_type:
+            queryset = queryset.filter(banner_type=banner_type)
+        
+        return queryset.order_by('-priority', '-created_at')
+
+
+class BannerAdminListCreateView(generics.ListCreateAPIView):
+    """Admin: List and create banners"""
+    permission_classes = [IsAdminUser]
+    serializer_class = BannerSerializer
+    queryset = Banner.objects.all().order_by('-priority', '-created_at')
+
+
+class BannerAdminDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """Admin: Banner detail view"""
+    permission_classes = [IsAdminUser]
+    serializer_class = BannerSerializer
+    queryset = Banner.objects.all()

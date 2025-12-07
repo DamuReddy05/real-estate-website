@@ -4,11 +4,15 @@ from .models import ContactMessage, SiteSettings
 
 class ContactMessageSerializer(serializers.ModelSerializer):
     """Serializer for contact messages"""
+    enquiry_type = serializers.SerializerMethodField()
     
     class Meta:
         model = ContactMessage
-        fields = ['id', 'name', 'email', 'phone', 'message', 'status', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'email', 'phone', 'message', 'status', 'created_at', 'updated_at', 'enquiry_type']
         read_only_fields = ['id', 'status', 'created_at', 'updated_at']
+    
+    def get_enquiry_type(self, obj):
+        return 'contact_message'
 
 
 class ContactMessageCreateSerializer(serializers.ModelSerializer):

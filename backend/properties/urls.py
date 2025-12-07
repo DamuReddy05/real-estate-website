@@ -48,4 +48,13 @@ urlpatterns = [
     path('customer/my-enquiries/', views.CustomerEnquiryListView.as_view(), name='customer_enquiries'),
     path('customer/<int:property_id>/images/', views.upload_property_image, name='customer_upload_property_image'),
     path('<int:property_id>/enquiries/', views.PropertyEnquiryCreateView.as_view(), name='property_enquiry_create'),
+    
+    # Admin: Property enquiries
+    path('admin/enquiries/', views.AdminPropertyEnquiryListView.as_view(), name='admin_property_enquiries'),
+    path('admin/enquiries/<int:pk>/', views.AdminPropertyEnquiryDetailView.as_view(), name='admin_property_enquiry_detail'),
+    
+    # Banner endpoints
+    path('banners/', views.BannerListView.as_view(), name='banner_list'),
+    path('admin/banners/', views.BannerAdminListCreateView.as_view(), name='admin_banner_list'),
+    path('admin/banners/<int:pk>/', views.BannerAdminDetailView.as_view(), name='admin_banner_detail'),
 ]

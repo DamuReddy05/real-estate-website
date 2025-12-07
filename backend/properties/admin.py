@@ -9,6 +9,7 @@ from .models import (
     Category,
     SubCategory,
     Amenity,
+    Banner,
 )
 
 
@@ -144,3 +145,28 @@ class PropertyEnquiryAdmin(admin.ModelAdmin):
     list_filter = ['status', 'created_at']
     search_fields = ['property__title', 'name', 'email', 'phone', 'message']
     readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(Banner)
+class BannerAdmin(admin.ModelAdmin):
+    list_display = ['name', 'banner_type', 'is_active', 'priority', 'start_date', 'end_date', 'created_at']
+    list_filter = ['banner_type', 'is_active', 'created_at']
+    search_fields = ['name', 'title', 'description']
+    list_editable = ['is_active', 'priority']
+    ordering = ['-priority', '-created_at']
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'banner_type', 'title', 'description')
+        }),
+        ('Image', {
+            'fields': ('image', 'image_url')
+        }),
+        ('Settings', {
+            'fields': ('link_url', 'is_active', 'priority')
+        }),
+        ('Date Range (Optional)', {
+            'fields': ('start_date', 'end_date'),
+            'classes': ('collapse',)
+        }),
+    )
