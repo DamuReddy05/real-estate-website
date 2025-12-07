@@ -4,11 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { RouterModule, Router } from '@angular/router';
 import { PropertyService } from '../../core/services/property.service';
 import { LocationService } from '../../core/services/location.service';
-import { Property, PropertyFilters } from '../../core/models/property.model';
+import { Property, PropertyFilters, Banner } from '../../core/models/property.model';
 import { ToastrService } from 'ngx-toastr';
 import { NgxSpinnerService } from 'ngx-spinner';
 import { HeaderComponent } from '../../shared/header/header.component';
 import { PropertyDetailComponent } from '../property-detail/property-detail.component';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-rent',
@@ -19,7 +20,9 @@ import { PropertyDetailComponent } from '../property-detail/property-detail.comp
     <app-header></app-header>
 
     <!-- RENT PAGE - CLEAN PROFESSIONAL BANNER -->
-    <header class="rent-banner">
+    <header class="rent-banner" 
+            [style.background-image]="hasRentBanner() ? 'url(' + getRentBannerImage() + ')' : null"
+            [class.has-banner]="hasRentBanner()">
       <div class="rent-banner-content">
         <div class="rent-badge">
           <i class="fas fa-home"></i> For Rent
@@ -347,6 +350,9 @@ import { PropertyDetailComponent } from '../property-detail/property-detail.comp
     .rent-banner {
       position: relative;
       background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #3b82f6 100%);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
       min-height: 280px;
       display: flex;
       align-items: center;
@@ -365,10 +371,12 @@ import { PropertyDetailComponent } from '../property-detail/property-detail.comp
       left: 0;
       right: 0;
       bottom: 0;
-      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 320"><path fill="rgba(255,255,255,0.05)" d="M0,96L48,112C96,128,192,160,288,165.3C384,171,480,149,576,133.3C672,117,768,107,864,112C960,117,1056,139,1152,138.7C1248,139,1344,117,1392,106.7L1440,96L1440,320L1392,320C1344,320,1248,320,1152,320C1056,320,960,320,864,320C768,320,672,320,576,320C480,320,384,320,288,320C192,320,96,320,48,320L0,320Z"></path></svg>');
-      background-size: cover;
-      background-position: bottom;
-      opacity: 0.6;
+      background: linear-gradient(135deg, rgba(30, 58, 138, 0.85) 0%, rgba(37, 99, 235, 0.85) 50%, rgba(59, 130, 246, 0.85) 100%);
+      z-index: 1;
+    }
+
+    .rent-banner.has-banner::before {
+      background: rgba(15, 23, 42, 0.6); // Darker overlay when banner image is present
     }
 
     .rent-banner-content {
@@ -378,6 +386,11 @@ import { PropertyDetailComponent } from '../property-detail/property-detail.comp
       width: 100%;
       text-align: center;
       color: white;
+    }
+
+    .rent-banner > * {
+      position: relative;
+      z-index: 2;
     }
 
     .rent-badge {
@@ -1696,6 +1709,9 @@ export class RentComponent implements OnInit {
     type: 'For Rent'
   };
 
+  // Banners
+  rentBanners: Banner[] = [];
+
   rentalCalculator = {
     monthlyIncome: 80000,
     monthlyExpenses: 30000,
@@ -1733,6 +1749,33 @@ export class RentComponent implements OnInit {
     });
 
     this.setupScrollListener();
+    this.loadBanners();
+  }
+
+  loadBanners(): void {
+    this.propertyService.getBanners('rent_banner').subscribe({
+      next: (banners) => {
+        this.rentBanners = banners.filter(b => b.is_active).map(b => ({
+          ...b,
+          image_source: b.image_source?.startsWith('/') ? environment.apiUrl + b.image_source : b.image_source
+        }));
+      },
+      error: (error) => {
+        console.error('Error loading rent banners:', error);
+        this.rentBanners = [];
+      }
+    });
+  }
+
+  getRentBannerImage(): string | null {
+    if (this.rentBanners.length > 0 && this.rentBanners[0].image_source) {
+      return this.rentBanners[0].image_source;
+    }
+    return null;
+  }
+
+  hasRentBanner(): boolean {
+    return this.rentBanners.length > 0 && !!this.getRentBannerImage();
   }
 
   setupScrollListener() {

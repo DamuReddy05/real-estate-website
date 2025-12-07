@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute, RouterModule } from '@angular/router';
 import { PropertyService } from '../../core/services/property.service';
 import { AuthService } from '../../core/services/auth.service';
-import { Property } from '../../core/models/property.model';
+import { Property, Amenity } from '../../core/models/property.model';
 import { User } from '../../core/models/user.model';
 import { ToastrService } from 'ngx-toastr';
 import { NgxSpinnerService } from 'ngx-spinner';
@@ -23,13 +23,14 @@ import { NgxSpinnerService } from 'ngx-spinner';
       <header class="header">
         <nav class="navbar">
           <div class="nav-brand" [routerLink]="isModalMode ? null : '/'" [class.clickable]="!isModalMode">
-            <h2><i class="fas fa-home"></i> RealEstateHub</h2>
+            <i class="fas fa-home"></i>
+            <h2>RealEstateHub</h2>
           </div>
           <div class="nav-buttons">
-            <button class="btn btn-icon" (click)="toggleFavorite()" [class.favorited]="isFavorite">
+            <button class="btn btn-icon" (click)="toggleFavorite()" [class.favorited]="isFavorite" [title]="isFavorite ? 'Remove from favorites' : 'Add to favorites'">
               <i class="fas fa-heart"></i>
             </button>
-            <button class="btn btn-icon" (click)="shareProperty()">
+            <button class="btn btn-icon" (click)="shareProperty()" title="Share property">
               <i class="fas fa-share-alt"></i>
             </button>
             <button class="btn btn-outline" (click)="goBack()" *ngIf="!isModalMode">
@@ -156,12 +157,23 @@ import { NgxSpinnerService } from 'ngx-spinner';
           <!-- Amenities -->
           <div class="card" *ngIf="property.amenities">
             <h3><i class="fas fa-star"></i> Amenities</h3>
-            <div class="amenities-grid">
-              <div class="amenity-item" *ngFor="let amenity of getAmenitiesList()">
-                <i class="fas fa-check-circle"></i>
-                <span>{{ amenity }}</span>
+            <div class="amenities-grid" *ngIf="property.amenities.length > 0; else noAmenities">
+              <div class="amenity-item" *ngFor="let amenity of property.amenities">
+                <div class="amenity-icon-wrapper">
+                  <i [class]="amenity.icon || 'fas fa-check-circle'"></i>
+                </div>
+                <div class="amenity-content">
+                  <span class="amenity-name">{{ amenity.name }}</span>
+                  <small class="amenity-desc" *ngIf="amenity.description">{{ amenity.description }}</small>
+                </div>
               </div>
             </div>
+            <ng-template #noAmenities>
+              <div class="empty-amenities">
+                <i class="fas fa-info-circle"></i>
+                <p>No amenities listed for this property.</p>
+              </div>
+            </ng-template>
           </div>
 
           <!-- Location -->
@@ -445,30 +457,50 @@ import { NgxSpinnerService } from 'ngx-spinner';
     }
 
     .header {
-      background: white;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
       position: sticky;
       top: 0;
       z-index: 100;
+      border-bottom: 1px solid #e2e8f0;
     }
 
     .navbar {
       max-width: 1400px;
       margin: 0 auto;
-      padding: 1rem 2rem;
+      padding: 1.25rem 2rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
 
     .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
       cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .nav-brand.clickable:hover {
+      opacity: 0.8;
+      transform: translateX(-2px);
+    }
+
+    .nav-brand i {
+      color: #2563eb;
+      font-size: 1.5rem;
     }
 
     .nav-brand h2 {
       margin: 0;
-      color: #2563eb;
+      color: #1e293b;
       font-size: 1.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     .nav-buttons {
@@ -480,8 +512,8 @@ import { NgxSpinnerService } from 'ngx-spinner';
     .btn-icon {
       width: 44px;
       height: 44px;
-      border-radius: 50%;
-      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      border: 2px solid #e2e8f0;
       background: white;
       color: #64748b;
       cursor: pointer;
@@ -490,22 +522,49 @@ import { NgxSpinnerService } from 'ngx-spinner';
       align-items: center;
       justify-content: center;
       font-size: 1.1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
 
     .btn-icon:hover {
       border-color: #2563eb;
       color: #2563eb;
-      transform: scale(1.1);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
     }
 
     .btn-icon.favorited {
       color: #ef4444;
-      background: #fee2e2;
+      background: linear-gradient(135deg, #fee2e2, #fecaca);
       border-color: #ef4444;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
     }
 
     .btn-icon.favorited i {
       animation: heartbeat 0.3s ease;
+    }
+
+    .btn-outline {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.6rem 1.25rem;
+      border-radius: 10px;
+      border: 2px solid #e2e8f0;
+      background: white;
+      color: #475569;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-size: 0.95rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .btn-outline:hover {
+      border-color: #2563eb;
+      color: #2563eb;
+      background: #eff6ff;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
     }
 
     @keyframes heartbeat {
@@ -822,24 +881,82 @@ import { NgxSpinnerService } from 'ngx-spinner';
     /* Amenities */
     .amenities-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-      gap: 0.75rem;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1rem;
     }
 
     .amenity-item {
       display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      padding: 0.75rem 1rem;
-      background: #f1f5f9;
-      border-radius: 8px;
-      color: #475569;
-      font-size: 0.875rem;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1rem;
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      transition: all 0.3s ease;
+      cursor: default;
     }
 
-    .amenity-item i {
-      color: #10b981;
-      font-size: 1rem;
+    .amenity-item:hover {
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+      border-color: #3b82f6;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+    }
+
+    .amenity-icon-wrapper {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+    }
+
+    .amenity-icon-wrapper i {
+      color: white;
+      font-size: 1.2rem;
+    }
+
+    .amenity-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .amenity-name {
+      font-weight: 600;
+      color: #1e293b;
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+
+    .amenity-desc {
+      color: #64748b;
+      font-size: 0.8rem;
+      line-height: 1.3;
+      margin: 0;
+    }
+
+    .empty-amenities {
+      text-align: center;
+      padding: 2rem;
+      color: #94a3b8;
+    }
+
+    .empty-amenities i {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+      opacity: 0.5;
+    }
+
+    .empty-amenities p {
+      margin: 0;
+      font-size: 0.9rem;
     }
 
     /* Location */
@@ -1603,6 +1720,14 @@ import { NgxSpinnerService } from 'ngx-spinner';
       .price-card.sticky {
         position: static;
       }
+
+      .navbar {
+        padding: 1rem 1.5rem;
+      }
+
+      .nav-brand h2 {
+        font-size: 1.3rem;
+      }
     }
 
     @media (max-width: 768px) {
@@ -1850,7 +1975,14 @@ export class PropertyDetailComponent implements OnInit, OnDestroy {
 
     this.propertyService.getProperty(+id).subscribe({
       next: (property: Property) => {
+        // Ensure amenities is always an array
+        if (!property.amenities || !Array.isArray(property.amenities)) {
+          property.amenities = [];
+        }
         this.property = property;
+        console.log('Loaded property:', property);
+        console.log('Property amenities:', property.amenities);
+        console.log('Amenities count:', property.amenities.length);
         this.loading = false;
         this.spinner.hide();
         
@@ -1865,7 +1997,9 @@ export class PropertyDetailComponent implements OnInit, OnDestroy {
         this.loading = false;
         this.spinner.hide();
         this.toastr.error('Property not found');
-        this.router.navigate(['/']);
+        if (!this.isModalMode) {
+          this.router.navigate(['/']);
+        }
       }
     });
   }
@@ -1959,9 +2093,9 @@ export class PropertyDetailComponent implements OnInit, OnDestroy {
     return iconMap[category] || '🏠';
   }
 
-  getAmenitiesList(): string[] {
+  getAmenitiesList(): Amenity[] {
     if (!this.property?.amenities) return [];
-    return this.property.amenities?.map(a => a.name) || [];
+    return this.property.amenities || [];
   }
 
   // Favorites
@@ -2044,12 +2178,52 @@ export class PropertyDetailComponent implements OnInit, OnDestroy {
 
   // Contact Modal
   openContactModal() {
-    if (!this.ensureAuthenticated()) {
+    if (!this.isAuthenticated) {
+      // For non-logged-in users, show modal
+      this.toastr.info('Please login to contact the property owner.');
+      this.router.navigate(['/login']);
       return;
     }
+    
+    // For logged-in users, send enquiry directly without modal
+    if (this.isAuthenticated && this.currentUser) {
+      this.contactOwnerDirectly();
+      return;
+    }
+    
     this.prefillContactData();
     this.showContactModal = true;
     document.body.style.overflow = 'hidden';
+  }
+
+  contactOwnerDirectly() {
+    if (this.submitting || !this.property) return;
+    if (!this.currentUser) return;
+    
+    this.submitting = true;
+    this.prefillContactData();
+    
+    const fullMessage = `${this.contactData.message}\n\nProperty: ${this.property?.title}\nLocation: ${this.property?.location}\nPrice: ₹${this.formatPrice(this.property?.price)}`;
+    
+    const payload = {
+      name: this.contactData.name,
+      email: this.contactData.email,
+      phone: this.contactData.phone,
+      message: fullMessage
+    };
+    
+    this.propertyService.createPropertyEnquiry(this.property.id, payload).subscribe({
+      next: () => {
+        this.toastr.success('Your enquiry has been sent successfully! The owner will contact you soon.', 'Enquiry Sent');
+        this.resetContactForm();
+        this.submitting = false;
+      },
+      error: (error) => {
+        console.error('Error submitting enquiry:', error);
+        this.toastr.error(error?.error?.detail || 'Failed to send enquiry. Please try again.', 'Error');
+        this.submitting = false;
+      }
+    });
   }
 
   closeContactModal() {

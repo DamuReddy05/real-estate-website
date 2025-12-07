@@ -411,6 +411,14 @@ import { HeaderComponent } from '../../../shared/header/header.component';
         <!-- Owner Information -->
         <div class="form-section">
           <h2><i class="fas fa-user"></i> Owner Information</h2>
+          <div class="info-message">
+            <i class="fas fa-info-circle"></i>
+            <div>
+              <strong>Note:</strong> The phone number and email provided below will <strong>NOT</strong> be visible to customers on the property listing page. 
+              Only our admin contact information will be displayed to customers for inquiries. 
+              This protects your privacy while ensuring all inquiries are properly managed.
+            </div>
+          </div>
           <div class="form-grid">
             <div class="form-group">
               <label for="ownerName">Owner Name</label>
@@ -662,6 +670,34 @@ import { HeaderComponent } from '../../../shared/header/header.component';
 
     .field-hint.warning {
       color: #b45309;
+    }
+
+    .info-message {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    .info-message i {
+      color: #2563eb;
+      font-size: 1.25rem;
+      margin-top: 0.1rem;
+      flex-shrink: 0;
+    }
+
+    .info-message div {
+      color: #1e40af;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    .info-message strong {
+      font-weight: 600;
     }
 
     .form-group input[readonly] {

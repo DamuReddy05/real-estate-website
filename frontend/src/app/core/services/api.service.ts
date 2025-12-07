@@ -53,4 +53,14 @@ export class ApiService {
 
     return this.http.post<T>(`${this.baseUrl}${endpoint}`, formData);
   }
+
+  // FormData POST (for multipart/form-data requests)
+  postFormData<T>(endpoint: string, formData: FormData): Observable<T> {
+    return this.http.post<T>(`${this.baseUrl}${endpoint}`, formData);
+  }
+
+  // FormData PATCH (for multipart/form-data requests)
+  patchFormData<T>(endpoint: string, formData: FormData): Observable<T> {
+    return this.http.patch<T>(`${this.baseUrl}${endpoint}`, formData);
+  }
 }

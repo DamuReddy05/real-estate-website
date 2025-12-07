@@ -7,6 +7,7 @@ export interface ContactMessage {
   status: 'new' | 'read' | 'replied' | 'closed';
   created_at: string;
   updated_at: string;
+  enquiry_type?: 'contact_message' | 'property_enquiry';
 }
 
 export interface CreateContactMessageRequest {

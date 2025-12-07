@@ -1047,8 +1047,11 @@ export class PropertyFormComponent implements OnInit {
   }
 
   loadAmenities() {
-    this.propertyService.getAmenities().subscribe({
-      next: (amenities) => this.availableAmenities = amenities,
+    // Use admin endpoint to get all amenities (including inactive ones for admin visibility)
+    this.propertyService.getAdminAmenities().subscribe({
+      next: (amenities) => {
+        this.availableAmenities = amenities;
+      },
       error: () => this.toastr.error('Failed to load amenities')
     });
   }
@@ -1074,7 +1077,10 @@ export class PropertyFormComponent implements OnInit {
   }
 
   isAmenitySelected(amenityId: number): boolean {
-    return this.selectedAmenityIds.includes(amenityId);
+    // Convert both to numbers for comparison to avoid type mismatch
+    const selected = this.selectedAmenityIds.map(id => Number(id));
+    const id = Number(amenityId);
+    return selected.includes(id);
   }
 
   getAmenityName(amenityId: number): string {
@@ -1174,9 +1180,9 @@ export class PropertyFormComponent implements OnInit {
       this.loading = true;
       this.spinner.show();
       
-      this.propertyService.getAdminProperties().subscribe({
-        next: (properties) => {
-          const property = properties.find(p => p.id === this.propertyId);
+      // Use getAdminProperty to get full property details with amenities
+      this.propertyService.getAdminProperty(this.propertyId).subscribe({
+        next: (property) => {
           if (property) {
             this.propertyData = {
               title: property.title,
@@ -1201,11 +1207,25 @@ export class PropertyFormComponent implements OnInit {
               owner_phone: property.owner_phone || '',
               owner_email: property.owner_email || ''
             };
+            // Set selected amenities from property data
+            if (property.amenities && Array.isArray(property.amenities)) {
+              this.selectedAmenityIds = property.amenities
+                .filter((a: any) => a && a.id)
+                .map((a: any) => Number(a.id));
+              console.log('Loaded property amenities:', property.amenities);
+              console.log('Selected amenity IDs:', this.selectedAmenityIds);
+            } else {
+              this.selectedAmenityIds = [];
+              console.warn('Property has no amenities or amenities is not an array:', property.amenities);
+            }
             this.existingImages = property.images || [];
             this.selectedTagIds = property.tags ? property.tags.map(tag => tag.id) : [];
             this.ensureCityAvailability();
             this.syncSelectedCity();
             this.syncSubcategoryOptions();
+          } else {
+            console.error('Property not found');
+            this.toastr.error('Property not found');
           }
           this.loading = false;
           this.spinner.hide();

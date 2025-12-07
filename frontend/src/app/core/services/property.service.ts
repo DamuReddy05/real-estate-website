@@ -17,7 +17,8 @@ import {
   SubCategoryOption,
   CityOption,
   PincodeRecord,
-  Amenity
+  Amenity,
+  Banner
 } from '../models/property.model';
 
 // Response interface for paginated API
@@ -58,6 +59,11 @@ export class PropertyService {
       .pipe(map(response => response.results || []));
   }
 
+  // Admin: Get single property by ID
+  getAdminProperty(id: number): Observable<Property> {
+    return this.apiService.get<Property>(`/properties/admin/${id}/`);
+  }
+
   // Admin: Create property
   createProperty(property: CreatePropertyRequest): Observable<Property> {
     return this.apiService.post<Property>('/properties/admin/create/', property);
@@ -85,6 +91,16 @@ export class PropertyService {
 
   getCustomerPropertyStats(): Observable<CustomerPropertyStats> {
     return this.apiService.get<CustomerPropertyStats>('/properties/customer/my-properties/stats/');
+  }
+
+  // Admin: Get all property enquiries
+  getAdminPropertyEnquiries(): Observable<PropertyEnquiry[]> {
+    return this.apiService.get<PropertyEnquiry[]>('/properties/admin/enquiries/');
+  }
+
+  // Admin: Update property enquiry (using PATCH for partial updates)
+  updatePropertyEnquiry(id: number, payload: Partial<PropertyEnquiry>): Observable<PropertyEnquiry> {
+    return this.apiService.patch<PropertyEnquiry>(`/properties/admin/enquiries/${id}/`, payload);
   }
 
   getPublicPropertyStats(): Observable<PropertyStats> {
@@ -309,6 +325,56 @@ export class PropertyService {
       'rented': 'primary'
     };
     return colorMap[status] || 'secondary';
+  }
+
+  // Admin: Amenities management
+  getAdminAmenities(): Observable<Amenity[]> {
+    return this.apiService.get<Amenity[] | { results: Amenity[] }>('/properties/admin/amenities/')
+      .pipe(map(response => this.normalizeList(response)));
+  }
+
+  createAmenity(payload: Partial<Amenity>): Observable<Amenity> {
+    return this.apiService.post<Amenity>('/properties/admin/amenities/', payload);
+  }
+
+  updateAmenity(id: number, payload: Partial<Amenity>): Observable<Amenity> {
+    return this.apiService.put<Amenity>(`/properties/admin/amenities/${id}/`, payload);
+  }
+
+  deleteAmenity(id: number): Observable<void> {
+    return this.apiService.delete<void>(`/properties/admin/amenities/${id}/`);
+  }
+
+  // Banner management
+  getBanners(type?: string): Observable<Banner[]> {
+    const params = type ? { type } : undefined;
+    return this.apiService.get<Banner[] | { results: Banner[] }>('/properties/banners/', params)
+      .pipe(map(response => this.normalizeList(response)));
+  }
+
+  getAdminBanners(): Observable<Banner[]> {
+    return this.apiService.get<Banner[] | { results: Banner[] }>('/properties/admin/banners/')
+      .pipe(map(response => this.normalizeList(response)));
+  }
+
+  createBanner(payload: Partial<Banner>): Observable<Banner> {
+    return this.apiService.post<Banner>('/properties/admin/banners/', payload);
+  }
+
+  createBannerWithFormData(formData: FormData): Observable<Banner> {
+    return this.apiService.post<Banner>('/properties/admin/banners/', formData);
+  }
+
+  updateBanner(id: number, payload: Partial<Banner>): Observable<Banner> {
+    return this.apiService.put<Banner>(`/properties/admin/banners/${id}/`, payload);
+  }
+
+  updateBannerWithFormData(id: number, formData: FormData): Observable<Banner> {
+    return this.apiService.patch<Banner>(`/properties/admin/banners/${id}/`, formData);
+  }
+
+  deleteBanner(id: number): Observable<void> {
+    return this.apiService.delete<void>(`/properties/admin/banners/${id}/`);
   }
 
   private normalizeList<T>(response: T[] | { results: T[] } | null | undefined): T[] {

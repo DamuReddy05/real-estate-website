@@ -3,12 +3,13 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { PropertyService } from '../../core/services/property.service';
-import { Property, CategoryOption, SubCategoryOption, Tag } from '../../core/models/property.model';
+import { Property, CategoryOption, SubCategoryOption, Tag, Banner } from '../../core/models/property.model';
 import { HeaderComponent } from '../../shared/header/header.component';
 import { LocationService } from '../../core/services/location.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ContactService } from '../../core/services/contact.service';
 import { SiteSettings } from '../../core/models/contact.model';
+import { environment } from '../../../environments/environment';
 
 interface CarouselSection {
   key: string;
@@ -68,18 +69,14 @@ export class HomeComponent implements OnInit, OnDestroy {
     { icon: 'fa-chart-line', title: 'Sell Property', description: 'List your property and reach genuine buyers', route: '/customer/properties' }
   ];
 
-  carouselSections: CarouselSection[] = [
-    { key: 'featured', title: 'Featured', subtitle: 'Top picks recommended for you' },
-    { key: 'underConstruction', title: 'Under Construction', subtitle: 'Projects nearing completion', filters: { status: 'inactive' } },
-    { key: 'ready', title: 'Ready to Move', subtitle: 'Move-in ready properties', filters: { status: 'active' } },
-    { key: 'resale', title: 'Resale', subtitle: 'Owner resale deals', filters: { status: 'sold' } },
-    { key: 'prelaunch', title: 'Pre Launch', subtitle: 'Invest early in hot projects', filters: { status: 'inactive', type: 'For Sale' } },
-    { key: 'commercial', title: 'Commercial', subtitle: 'Offices & retail spaces', filters: { category: 'commercial' } }
-  ];
-
+  carouselSections: CarouselSection[] = [];
   carouselData: Record<string, Property[]> = {};
   carouselState: Record<string, { page: number; pageSize: number }> = {};
   siteSettings: SiteSettings = {};
+  banners: Banner[] = [];
+  mainBanners: Banner[] = [];
+  buyBanners: Banner[] = [];
+  rentBanners: Banner[] = [];
 
   constructor(
     private propertyService: PropertyService,
@@ -101,9 +98,9 @@ export class HomeComponent implements OnInit, OnDestroy {
       this.selectedCity = city;
       this.loadProperties();
     });
-    this.carousalDefaults();
     this.loadSiteSettings();
     this.loadFilterOptions();
+    this.loadBanners();
     
     // Close dropdown when clicking outside
     setTimeout(() => {
@@ -120,9 +117,13 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.propertyService.getCategories().subscribe({
       next: (categories) => {
         this.availableCategories = categories;
+        this.initializeCarouselSections();
+        // Reload properties to apply category-based sections
+        this.loadProperties();
       },
       error: () => {
         this.availableCategories = [];
+        this.initializeCarouselSections();
       }
     });
 
@@ -276,24 +277,109 @@ export class HomeComponent implements OnInit, OnDestroy {
     };
   }
 
+  loadBanners(): void {
+    this.propertyService.getBanners().subscribe({
+      next: (banners) => {
+        // Process banners and ensure image URLs are absolute
+        this.banners = banners
+          .filter(b => b.is_active)
+          .map(banner => {
+            const absoluteUrl = this.getAbsoluteImageUrl(banner.image_source || banner.image_url || banner.image);
+            return {
+              ...banner,
+              image_source: absoluteUrl || undefined
+            };
+          });
+        this.mainBanners = this.banners.filter(b => b.banner_type === 'main_banner');
+        this.buyBanners = this.banners.filter(b => b.banner_type === 'buy_banner');
+        this.rentBanners = this.banners.filter(b => b.banner_type === 'rent_banner');
+      },
+      error: (error) => {
+        console.error('Error loading banners:', error);
+        this.banners = [];
+        this.mainBanners = [];
+        this.buyBanners = [];
+        this.rentBanners = [];
+      }
+    });
+  }
+
+  private getAbsoluteImageUrl(url: string | undefined | null): string | null {
+    if (!url) return null;
+    // If already absolute URL, return as is
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    // If relative URL starting with /, prepend API base URL (remove /api suffix)
+    if (url.startsWith('/')) {
+      const apiBaseUrl = environment.apiUrl.replace('/api', '');
+      return `${apiBaseUrl}${url}`;
+    }
+    return url;
+  }
+
+  initializeCarouselSections(): void {
+    // Build carousel sections from active categories
+    this.carouselSections = [];
+    
+    // Featured section (always first)
+    this.carouselSections.push({
+      key: 'featured',
+      title: 'Featured',
+      subtitle: 'Top picks recommended for you'
+    });
+
+    // Add sections for each active category
+    this.availableCategories
+      .filter(cat => cat.is_active)
+      .sort((a, b) => (b.priority || 0) - (a.priority || 0))
+      .forEach(category => {
+        this.carouselSections.push({
+          key: `category_${category.id}`,
+          title: category.name,
+          subtitle: category.description || `Browse ${category.name.toLowerCase()} properties`,
+          filters: { category: category.slug || category.name.toLowerCase() }
+        });
+      });
+
+    // Initialize carousel state
+    this.carousalDefaults();
+  }
+
   private prepareCarouselData(list: Property[]): void {
     if (!list.length) {
       this.carouselSections.forEach(section => (this.carouselData[section.key] = []));
       return;
     }
 
-    const groups: Record<string, Property[]> = {
-      featured: [...list],
-      underConstruction: list.filter((_, idx) => idx % 2 === 0),
-      ready: list.filter((_, idx) => idx % 2 === 1),
-      resale: list.filter(p => p.status === 'inactive' || p.status === 'sold'),
-      prelaunch: list.slice().reverse(),
-      commercial: list.filter(p => p.category === 'commercial')
-    };
-
     this.carouselSections.forEach(section => {
-      const data = groups[section.key] && groups[section.key].length ? groups[section.key] : list;
-      this.carouselData[section.key] = data.slice(0, 20);
+      let filteredList: Property[] = [];
+      
+      if (section.key === 'featured') {
+        // Featured: show top properties (first 20)
+        filteredList = [...list].slice(0, 20);
+      } else if (section.filters?.['category']) {
+        // Category-based filtering
+        const categorySlug = section.filters['category'];
+        filteredList = list.filter(p => {
+          const propCategory = this.availableCategories.find(c => 
+            c.slug === categorySlug || c.name.toLowerCase() === categorySlug.toLowerCase()
+          );
+          return propCategory && propCategory.is_active;
+        });
+      } else if (section.filters) {
+        // Apply other filters
+        filteredList = list.filter(p => {
+          return Object.keys(section.filters!).every(key => {
+            const filterValue = section.filters![key];
+            return (p as any)[key] === filterValue;
+          });
+        });
+      } else {
+        filteredList = list.slice(0, 20);
+      }
+
+      this.carouselData[section.key] = filteredList.slice(0, 20);
       this.carouselState[section.key].page = 0;
     });
   }
@@ -413,6 +499,16 @@ export class HomeComponent implements OnInit, OnDestroy {
       return;
     }
     this.router.navigate(['/customer/properties']);
+  }
+
+  talkToExpert(): void {
+    // Get contact phone from site settings
+    const phone = this.siteSettings.contact_phone || '+919876543210';
+    // Remove any spaces, dashes, or special characters except +
+    const cleanPhone = phone.replace(/[\s\-()]/g, '');
+    // Format for WhatsApp URL
+    const whatsappUrl = `https://wa.me/${cleanPhone}`;
+    window.open(whatsappUrl, '_blank');
   }
 
   handleFreePost(): void {

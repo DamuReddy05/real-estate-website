@@ -3,9 +3,13 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 import { ContactService } from '../../core/services/contact.service';
+import { PropertyService } from '../../core/services/property.service';
 import { ContactMessage } from '../../core/models/contact.model';
+import { PropertyEnquiry } from '../../core/models/property.model';
 import { ToastrService } from 'ngx-toastr';
 import { NgxSpinnerService } from 'ngx-spinner';
+import * as XLSX from 'xlsx';
+import { forkJoin } from 'rxjs';
 
 @Component({
   selector: 'app-admin-messages',
@@ -16,10 +20,16 @@ import { NgxSpinnerService } from 'ngx-spinner';
       <!-- Header -->
       <div class="header-section">
         <h1><i class="fas fa-envelope"></i> Contact Messages</h1>
-        <button class="btn-refresh" (click)="loadMessages()" [disabled]="loading">
-          <i class="fas fa-sync-alt" [class.spinning]="loading"></i>
-          Refresh
-        </button>
+        <div class="header-actions">
+          <button class="btn-export" (click)="exportToExcel()" [disabled]="filteredMessages.length === 0">
+            <i class="fas fa-file-excel"></i>
+            Export to Excel
+          </button>
+          <button class="btn-refresh" (click)="loadMessages()" [disabled]="loading">
+            <i class="fas fa-sync-alt" [class.spinning]="loading"></i>
+            Refresh
+          </button>
+        </div>
       </div>
 
       <!-- Stats Cards -->
@@ -52,6 +62,20 @@ import { NgxSpinnerService } from 'ngx-spinner';
             <p>Closed</p>
           </div>
         </div>
+        <div class="stat-card" style="border-left-color: #3b82f6;">
+          <i class="fas fa-building"></i>
+          <div class="stat-content">
+            <h3>{{ getPropertyEnquiryCount() }}</h3>
+            <p>Property Enquiries</p>
+          </div>
+        </div>
+        <div class="stat-card" style="border-left-color: #8b5cf6;">
+          <i class="fas fa-envelope-open-text"></i>
+          <div class="stat-content">
+            <h3>{{ getContactMessageCount() }}</h3>
+            <p>Contact Messages</p>
+          </div>
+        </div>
       </div>
 
       <!-- Filters -->
@@ -64,6 +88,13 @@ import { NgxSpinnerService } from 'ngx-spinner';
             (input)="filterMessages()"
             class="search-input"
           >
+        </div>
+        <div class="filter-group">
+          <select [(ngModel)]="typeFilter" (change)="filterMessages()" class="filter-select">
+            <option value="">All Types</option>
+            <option value="contact_message">📧 Contact Messages</option>
+            <option value="property_enquiry">🏠 Property Enquiries</option>
+          </select>
         </div>
         <div class="filter-group">
           <select [(ngModel)]="statusFilter" (change)="filterMessages()" class="filter-select">
@@ -94,21 +125,32 @@ import { NgxSpinnerService } from 'ngx-spinner';
 
           <!-- Message Header -->
           <div class="message-header">
-            <div class="user-info">
-              <div class="avatar">
-                {{ message.name.charAt(0).toUpperCase() }}
-              </div>
-              <div class="user-details">
-                <h3>{{ message.name }}</h3>
-                <div class="contact-details">
-                  <span><i class="fas fa-envelope"></i> {{ message.email }}</span>
-                  <span><i class="fas fa-phone"></i> {{ message.phone }}</span>
+              <div class="user-info">
+                <div class="avatar">
+                  {{ getMessageName(message).charAt(0).toUpperCase() }}
+                </div>
+                <div class="user-details">
+                  <h3>{{ getMessageName(message) }}</h3>
+                  <div class="contact-details">
+                    <span *ngIf="getMessageEmail(message)"><i class="fas fa-envelope"></i> {{ getMessageEmail(message) }}</span>
+                    <span *ngIf="getMessagePhone(message)"><i class="fas fa-phone"></i> {{ getMessagePhone(message) }}</span>
+                  </div>
                 </div>
               </div>
-            </div>
             <div class="message-date">
               <i class="fas fa-clock"></i>
               {{ formatDate(message.created_at) }}
+            </div>
+          </div>
+
+          <!-- Property Info (for property enquiries) -->
+          <div class="property-info" *ngIf="isPropertyEnquiry(message)">
+            <div class="property-badge" *ngIf="getPropertyTitle(message)">
+              <i class="fas fa-building"></i>
+              <div>
+                <strong>{{ getPropertyTitle(message) }}</strong>
+                <small>{{ getPropertyLocation(message) }}</small>
+              </div>
             </div>
           </div>
 
@@ -148,14 +190,16 @@ import { NgxSpinnerService } from 'ngx-spinner';
               <i class="fas fa-redo"></i> Reopen
             </button>
             <a 
-              [href]="'mailto:' + message.email + '?subject=Re: Contact from RealEstateHub&body=Hi ' + message.name + ',%0D%0A%0D%0AThank you for contacting us.%0D%0A%0D%0A'"
+              *ngIf="getMessageEmail(message)"
+              [href]="'mailto:' + getMessageEmail(message) + '?subject=Re: Contact from RealEstateHub&body=Hi ' + getMessageName(message) + ',%0D%0A%0D%0AThank you for contacting us.%0D%0A%0D%0A'"
               class="btn btn-outline"
               target="_blank"
             >
               <i class="fas fa-envelope"></i> Reply via Email
             </a>
             <a 
-              [href]="'tel:' + message.phone"
+              *ngIf="getMessagePhone(message)"
+              [href]="'tel:' + getMessagePhone(message)"
               class="btn btn-outline"
             >
               <i class="fas fa-phone"></i> Call
@@ -202,6 +246,32 @@ import { NgxSpinnerService } from 'ngx-spinner';
       align-items: center;
       margin-bottom: 2rem;
     }
+    .header-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+    .btn-export {
+      padding: 0.75rem 1.5rem;
+      background: linear-gradient(135deg, #10b981, #059669);
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      color: white;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.3s ease;
+    }
+    .btn-export:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+    .btn-export:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
 
     .header-section h1 {
       margin: 0;
@@ -210,6 +280,32 @@ import { NgxSpinnerService } from 'ngx-spinner';
       display: flex;
       align-items: center;
       gap: 0.75rem;
+    }
+    .header-actions {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+    .btn-export {
+      padding: 0.75rem 1.5rem;
+      background: linear-gradient(135deg, #10b981, #059669);
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      color: white;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.3s ease;
+    }
+    .btn-export:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+    .btn-export:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
     .btn-refresh {
@@ -463,6 +559,40 @@ import { NgxSpinnerService } from 'ngx-spinner';
       color: #cbd5e1;
     }
 
+    /* Property Info */
+    .property-info {
+      margin-bottom: 1rem;
+    }
+
+    .property-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 1rem;
+      background: linear-gradient(135deg, #eff6ff, #dbeafe);
+      border: 1px solid #bfdbfe;
+      border-radius: 10px;
+      border-left: 4px solid #3b82f6;
+    }
+
+    .property-badge i {
+      color: #3b82f6;
+      font-size: 1.5rem;
+    }
+
+    .property-badge strong {
+      display: block;
+      color: #1e293b;
+      font-size: 1rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .property-badge small {
+      display: block;
+      color: #64748b;
+      font-size: 0.875rem;
+    }
+
     /* Message Body */
     .message-body {
       background: #f8fafc;
@@ -639,15 +769,17 @@ import { NgxSpinnerService } from 'ngx-spinner';
   `]
 })
 export class AdminMessagesComponent implements OnInit {
-  messages: ContactMessage[] = [];
-  filteredMessages: ContactMessage[] = [];
+  messages: (ContactMessage | PropertyEnquiry)[] = [];
+  filteredMessages: (ContactMessage | PropertyEnquiry)[] = [];
   loading = false;
   searchQuery = '';
   statusFilter = '';
+  typeFilter = '';
   sortBy = 'newest';
 
   constructor(
     private contactService: ContactService,
+    private propertyService: PropertyService,
     private toastr: ToastrService,
     private spinner: NgxSpinnerService
   ) {}
@@ -664,27 +796,40 @@ export class AdminMessagesComponent implements OnInit {
     this.filteredMessages = [];
     this.spinner.show();
 
-    this.contactService.getContactMessages().subscribe({
-      next: (messages) => {
-        console.log('✅ Messages loaded successfully:', messages);
-        console.log('📊 Message count:', messages?.length || 0);
-        console.log('📊 Type of messages:', typeof messages, Array.isArray(messages));
+    // Load both contact messages and property enquiries
+    forkJoin({
+      contactMessages: this.contactService.getContactMessages(),
+      propertyEnquiries: this.propertyService.getAdminPropertyEnquiries()
+    }).subscribe({
+      next: (results) => {
+        console.log('✅ Messages loaded successfully');
+        console.log('📧 Contact messages:', results.contactMessages?.length || 0);
+        console.log('🏠 Property enquiries:', results.propertyEnquiries?.length || 0);
         
-        this.messages = Array.isArray(messages) ? messages : [];
+        // Normalize property enquiries to match contact message format for display
+        const normalizedEnquiries: any[] = (results.propertyEnquiries || []).map((enquiry: PropertyEnquiry) => ({
+          ...enquiry,
+          enquiry_type: 'property_enquiry',
+          // Map property enquiry status to contact message status format
+          status: enquiry.status === 'contacted' ? 'read' : 
+                  enquiry.status === 'scheduled' ? 'replied' : 
+                  enquiry.status === 'closed' ? 'closed' : 'new'
+        }));
+        
+        // Combine both types of messages
+        const contactMsgs = Array.isArray(results.contactMessages) ? results.contactMessages : [];
+        this.messages = [...contactMsgs, ...normalizedEnquiries];
         this.filteredMessages = [...this.messages];
         this.sortMessages();
         
         setTimeout(() => {
           this.loading = false;
           this.spinner.hide();
-          console.log('✅ Loading complete. Filtered messages:', this.filteredMessages.length);
-          console.log('✅ Loading state set to:', this.loading);
+          console.log('✅ Loading complete. Total messages:', this.filteredMessages.length);
         }, 100);
       },
       error: (error) => {
         console.error('❌ Error loading messages:', error);
-        console.error('Error details:', error.error);
-        console.error('Status:', error.status);
         
         this.messages = [];
         this.filteredMessages = [];
@@ -702,9 +847,6 @@ export class AdminMessagesComponent implements OnInit {
         }
         
         this.toastr.error(errorMessage, 'Error', { timeOut: 5000 });
-      },
-      complete: () => {
-        console.log('🔄 Observable completed');
       }
     });
   }
@@ -712,15 +854,29 @@ export class AdminMessagesComponent implements OnInit {
   filterMessages() {
     let filtered = [...this.messages];
 
+    // Type filter (contact message vs property enquiry)
+    if (this.typeFilter) {
+      filtered = filtered.filter(message => message.enquiry_type === this.typeFilter);
+    }
+
     // Search filter
     if (this.searchQuery.trim()) {
       const query = this.searchQuery.toLowerCase();
-      filtered = filtered.filter(message => 
-        message.name.toLowerCase().includes(query) ||
-        message.email.toLowerCase().includes(query) ||
-        message.phone?.toLowerCase().includes(query) ||
-        message.message.toLowerCase().includes(query)
-      );
+      filtered = filtered.filter(message => {
+        const name = this.getMessageName(message).toLowerCase();
+        const email = (this.getMessageEmail(message) || '').toLowerCase();
+        const phone = (this.getMessagePhone(message) || '').toLowerCase();
+        const msg = (message.message || '').toLowerCase();
+        const propTitle = (this.getPropertyTitle(message) || '').toLowerCase();
+        const propLocation = (this.getPropertyLocation(message) || '').toLowerCase();
+        
+        return name.includes(query) ||
+               email.includes(query) ||
+               phone.includes(query) ||
+               msg.includes(query) ||
+               propTitle.includes(query) ||
+               propLocation.includes(query);
+      });
     }
 
     // Status filter
@@ -743,13 +899,21 @@ export class AdminMessagesComponent implements OnInit {
       );
     } else if (this.sortBy === 'name') {
       this.filteredMessages.sort((a, b) => 
-        a.name.localeCompare(b.name)
+        this.getMessageName(a).localeCompare(this.getMessageName(b))
       );
     }
   }
 
   getMessageCount(status: string): number {
     return this.messages.filter(m => m.status === status).length;
+  }
+
+  getPropertyEnquiryCount(): number {
+    return this.messages.filter(m => m.enquiry_type === 'property_enquiry').length;
+  }
+
+  getContactMessageCount(): number {
+    return this.messages.filter(m => m.enquiry_type === 'contact_message' || !m.enquiry_type).length;
   }
 
   getStatusLabel(status: string): string {
@@ -794,24 +958,56 @@ export class AdminMessagesComponent implements OnInit {
     });
   }
 
-  markAsRead(message: ContactMessage) {
+  markAsRead(message: ContactMessage | PropertyEnquiry) {
     this.updateStatus(message, 'read');
   }
 
-  markAsReplied(message: ContactMessage) {
+  markAsReplied(message: ContactMessage | PropertyEnquiry) {
     this.updateStatus(message, 'replied');
   }
 
-  markAsClosed(message: ContactMessage) {
+  markAsClosed(message: ContactMessage | PropertyEnquiry) {
     this.updateStatus(message, 'closed');
   }
 
-  reopenMessage(message: ContactMessage) {
+  reopenMessage(message: ContactMessage | PropertyEnquiry) {
     this.updateStatus(message, 'read');
   }
 
-  updateStatus(message: ContactMessage, newStatus: string) {
+  updateStatus(message: ContactMessage | PropertyEnquiry, newStatus: string) {
     this.spinner.show();
+    
+    // Map contact message status back to property enquiry status if needed
+    if (message.enquiry_type === 'property_enquiry') {
+      // Map display status to PropertyEnquiry status
+      let actualStatus: 'new' | 'contacted' | 'scheduled' | 'closed';
+      if (newStatus === 'read') {
+        actualStatus = 'contacted';
+      } else if (newStatus === 'replied') {
+        actualStatus = 'scheduled';
+      } else if (newStatus === 'closed') {
+        actualStatus = 'closed';
+      } else {
+        actualStatus = 'new';
+      }
+      
+      // Update property enquiry status via API - use PATCH to only update status
+      this.propertyService.updatePropertyEnquiry(message.id, { status: actualStatus }).subscribe({
+        next: (updatedEnquiry) => {
+          // Reload messages to get the updated data
+          this.loadMessages();
+          this.toastr.success(`Message marked as ${this.getStatusLabel(newStatus)}`, 'Status Updated');
+        },
+        error: (error) => {
+          console.error('Error updating enquiry status:', error);
+          console.error('Error details:', error.error);
+          const errorMsg = error.error?.detail || error.error?.message || error.error?.status?.[0] || 'Failed to update message status';
+          this.toastr.error(errorMsg, 'Error');
+          this.spinner.hide();
+        }
+      });
+      return;
+    }
     
     this.contactService.updateContactMessage(message.id, { status: newStatus as any }).subscribe({
       next: (updatedMessage) => {
@@ -831,8 +1027,94 @@ export class AdminMessagesComponent implements OnInit {
   clearFilters() {
     this.searchQuery = '';
     this.statusFilter = '';
+    this.typeFilter = '';
     this.sortBy = 'newest';
     this.filterMessages();
+  }
+
+  exportToExcel(): void {
+    if (this.filteredMessages.length === 0) {
+      this.toastr.warning('No messages to export', 'Warning');
+      return;
+    }
+
+    // Prepare data for Excel
+    const excelData = this.filteredMessages.map(message => ({
+      'Name': message.name,
+      'Email': message.email,
+      'Phone': message.phone || '-',
+      'Message': message.message,
+      'Status': this.getStatusLabel(message.status),
+      'Created Date': this.formatDateForExcel(message.created_at),
+      'Updated Date': message.updated_at ? this.formatDateForExcel(message.updated_at) : '-'
+    }));
+
+    // Create worksheet
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    
+    // Set column widths
+    const columnWidths = [
+      { wch: 20 }, // Name
+      { wch: 30 }, // Email
+      { wch: 15 }, // Phone
+      { wch: 50 }, // Message
+      { wch: 12 }, // Status
+      { wch: 20 }, // Created Date
+      { wch: 20 }  // Updated Date
+    ];
+    worksheet['!cols'] = columnWidths;
+
+    // Create workbook
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Contact Messages');
+
+    // Generate filename with current date
+    const date = new Date();
+    const dateStr = date.toISOString().split('T')[0];
+    const filename = `contact_messages_${dateStr}.xlsx`;
+
+    // Write file
+    XLSX.writeFile(workbook, filename);
+    
+    this.toastr.success(`Exported ${this.filteredMessages.length} messages to Excel`, 'Export Successful');
+  }
+
+  formatDateForExcel(dateString: string): string {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  }
+
+  // Helper methods for safe property access
+  getMessageName(message: ContactMessage | PropertyEnquiry): string {
+    return message.name || 'Unknown User';
+  }
+
+  getMessageEmail(message: ContactMessage | PropertyEnquiry): string | undefined {
+    return message.email;
+  }
+
+  getMessagePhone(message: ContactMessage | PropertyEnquiry): string | undefined {
+    return message.phone;
+  }
+
+  getPropertyTitle(message: ContactMessage | PropertyEnquiry): string | undefined {
+    return (message as any).property_title;
+  }
+
+  getPropertyLocation(message: ContactMessage | PropertyEnquiry): string | undefined {
+    return (message as any).property_location;
+  }
+
+  isPropertyEnquiry(message: ContactMessage | PropertyEnquiry): boolean {
+    return message.enquiry_type === 'property_enquiry';
   }
 }
 

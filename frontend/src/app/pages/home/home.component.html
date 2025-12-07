@@ -1,6 +1,8 @@
 <app-header></app-header>
 
-<section class="hero">
+<section class="hero" 
+         [style.background-image]="mainBanners.length > 0 && mainBanners[0].image_source ? 'url(' + mainBanners[0].image_source + ')' : null"
+         [class.has-banner]="mainBanners.length > 0 && mainBanners[0].image_source">
   <div class="container hero-grid">
     <div class="hero-copy">
       <p class="tag">Verified & curated listings</p>
@@ -226,7 +228,7 @@
         <p>Our advisory team will understand your budget & preferences and share the best verified options.</p>
       </div>
       <div class="cta-actions">
-        <button class="btn-primary" (click)="handlePostProperty()">Talk to Expert</button>
+        <button class="btn-primary" (click)="talkToExpert()">Talk to Expert</button>
         <button class="btn-ghost" (click)="navigateTo('/buy')">Browse Listings</button>
       </div>
     </div>
@@ -279,6 +281,7 @@
     <div class="footer-bottom">© 2024 RealEstateHub. All rights reserved.</div>
   </div>
 </footer>
+
 
 
 

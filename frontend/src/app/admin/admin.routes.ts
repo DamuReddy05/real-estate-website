@@ -51,6 +51,18 @@ export const adminRoutes: Routes = [
       {
         path: 'settings',
         loadComponent: () => import('./settings/site-settings.component').then(m => m.SiteSettingsComponent)
+      },
+      {
+        path: 'banners',
+        loadComponent: () => import('./banners/banner-manager.component').then(m => m.BannerManagerComponent)
+      },
+      {
+        path: 'users',
+        loadComponent: () => import('./users/user-management.component').then(m => m.UserManagementComponent)
+      },
+      {
+        path: 'amenities',
+        loadComponent: () => import('./amenities/amenities-management.component').then(m => m.AmenitiesManagementComponent)
       }
     ]
   }

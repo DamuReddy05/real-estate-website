@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ToastrService } from 'ngx-toastr';
 import { PropertyService } from '../../core/services/property.service';
-import { Tag, CategoryOption, SubCategoryOption } from '../../core/models/property.model';
+import { Tag, CategoryOption, SubCategoryOption, Amenity } from '../../core/models/property.model';
 
 @Component({
   selector: 'app-taxonomy',
@@ -35,6 +35,11 @@ import { Tag, CategoryOption, SubCategoryOption } from '../../core/models/proper
           <p class="value">{{ subcategoryList.length }}</p>
           <small>{{ activeSubcategories }} active</small>
         </div>
+        <div class="insight-card">
+          <p class="label">Amenities</p>
+          <p class="value">{{ amenities.length }}</p>
+          <small>{{ activeAmenities }} active</small>
+        </div>
       </div>
 
       <div class="panel-switcher stacked">
@@ -57,6 +62,13 @@ import { Tag, CategoryOption, SubCategoryOption } from '../../core/models/proper
           <div>
             <span>Sub Categories</span>
             <small>{{ subcategoryList.length }} total • {{ activeSubcategories }} active</small>
+          </div>
+        </button>
+        <button type="button" class="pill" [class.active]="activePanel === 'amenities'" (click)="switchPanel('amenities')">
+          <i class="fas fa-star"></i>
+          <div>
+            <span>Amenities</span>
+            <small>{{ amenities.length }} total • {{ activeAmenities }} active</small>
           </div>
         </button>
       </div>
@@ -293,6 +305,87 @@ import { Tag, CategoryOption, SubCategoryOption } from '../../core/models/proper
           </ng-container>
           <ng-template #emptySubcategoriesState>
             <p class="empty-state">No sub categories found.</p>
+          </ng-template>
+        </div>
+      </section>
+
+      <!-- AMENITIES PANEL -->
+      <section class="panel-grid" [hidden]="activePanel !== 'amenities'" id="amenities-panel">
+        <form class="editor-card" (ngSubmit)="saveAmenity()" #amenityForm="ngForm">
+          <div class="editor-header">
+            <div>
+              <h2>{{ editingAmenityId ? 'Edit Amenity' : 'Create Amenity' }}</h2>
+              <p>Property features like Parking, Gym, Pool, etc.</p>
+            </div>
+            <button type="button" class="btn-text" (click)="resetAmenityForm()" *ngIf="editingAmenityId">Cancel edit</button>
+          </div>
+          <label>Name *</label>
+          <input type="text" name="amenityName" [(ngModel)]="amenityDraft.name" required placeholder="e.g., Swimming Pool" />
+          
+          <label>Icon (Font Awesome class)</label>
+          <input type="text" name="amenityIcon" [(ngModel)]="amenityDraft.icon" placeholder="e.g., fa-swimming-pool" />
+          
+          <div class="multi-row">
+            <div>
+              <label>Priority</label>
+              <input type="number" name="amenityPriority" [(ngModel)]="amenityDraft.priority" min="0" />
+            </div>
+            <div>
+              <label>Status</label>
+              <select name="amenityStatus" [(ngModel)]="amenityDraft.is_active">
+                <option [ngValue]="true">Active</option>
+                <option [ngValue]="false">Hidden</option>
+              </select>
+            </div>
+          </div>
+          
+          <label>Description</label>
+          <textarea name="amenityDescription" [(ngModel)]="amenityDraft.description" rows="2" placeholder="Optional description"></textarea>
+          
+          <div class="form-actions">
+            <button class="btn-primary" type="submit" [disabled]="amenitySaving">
+              {{ editingAmenityId ? 'Update Amenity' : 'Add Amenity' }}
+            </button>
+          </div>
+        </form>
+        
+        <div class="table-card">
+          <div class="table-toolbar">
+            <div class="toolbar-left">
+              <i class="fas fa-search"></i>
+              <input type="text" placeholder="Search amenities..."
+                [(ngModel)]="amenitySearch"
+                name="amenitySearch"
+                [ngModelOptions]="{standalone: true}">
+            </div>
+            <span class="table-count">{{ filteredAmenities.length }} results</span>
+          </div>
+          
+          <ng-container *ngIf="filteredAmenities.length; else emptyAmenitiesState">
+            <div class="cards-grid">
+              <div class="entity-card" *ngFor="let amenity of filteredAmenities">
+                <div class="card-head">
+                  <div>
+                    <p class="card-title">
+                      <i [class]="amenity.icon || 'fas fa-check-circle'" *ngIf="amenity.icon"></i>
+                      {{ amenity.name }}
+                    </p>
+                    <p class="card-subtitle">Priority {{ amenity.priority || 0 }}</p>
+                  </div>
+                  <span class="status-pill" [class.inactive]="!amenity.is_active">
+                    {{ amenity.is_active ? 'Active' : 'Hidden' }}
+                  </span>
+                </div>
+                <p class="card-body">{{ amenity.description || 'No description provided.' }}</p>
+                <div class="card-actions">
+                  <button class="btn-ghost" type="button" (click)="editAmenity(amenity)">Edit</button>
+                  <button class="btn-danger" type="button" (click)="deleteAmenity(amenity)">Delete</button>
+                </div>
+              </div>
+            </div>
+          </ng-container>
+          <ng-template #emptyAmenitiesState>
+            <p class="empty-state">No amenities found. Create one using the form on the left.</p>
           </ng-template>
         </div>
       </section>
@@ -590,23 +683,28 @@ export class TaxonomyComponent implements OnInit {
   tags: Tag[] = [];
   categories: CategoryOption[] = [];
   subcategoryList: SubCategoryOption[] = [];
+  amenities: Amenity[] = [];
 
   tagDraft: Partial<Tag> = this.defaultTag();
   categoryDraft: Partial<CategoryOption> = this.defaultCategory();
   subcategoryDraft: Partial<SubCategoryOption> = this.defaultSubcategory();
+  amenityDraft: Partial<Amenity> = this.defaultAmenity();
 
   editingTagId: number | null = null;
   editingCategoryId: number | null = null;
   editingSubcategoryId: number | null = null;
+  editingAmenityId: number | null = null;
 
   tagSaving = false;
   categorySaving = false;
   subcategorySaving = false;
+  amenitySaving = false;
 
-  activePanel: 'tags' | 'categories' | 'subcategories' = 'tags';
+  activePanel: 'tags' | 'categories' | 'subcategories' | 'amenities' = 'tags';
   tagSearch = '';
   categorySearch = '';
   subcategorySearch = '';
+  amenitySearch = '';
   subcategoryCategoryFilter: number | 'all' = 'all';
 
   constructor(
@@ -622,6 +720,7 @@ export class TaxonomyComponent implements OnInit {
     this.loadTags();
     this.loadCategories();
     this.loadSubcategories();
+    this.loadAmenities();
   }
 
   loadTags(): void {
@@ -645,7 +744,14 @@ export class TaxonomyComponent implements OnInit {
     });
   }
 
-  switchPanel(panel: 'tags' | 'categories' | 'subcategories'): void {
+  loadAmenities(): void {
+    this.propertyService.getAdminAmenities().subscribe({
+      next: (amenities) => this.amenities = amenities,
+      error: () => this.toastr.error('Failed to load amenities')
+    });
+  }
+
+  switchPanel(panel: 'tags' | 'categories' | 'subcategories' | 'amenities'): void {
     this.activePanel = panel;
     setTimeout(() => {
       document.getElementById(`${panel}-panel`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -694,6 +800,20 @@ export class TaxonomyComponent implements OnInit {
 
   get activeSubcategories(): number {
     return this.subcategoryList.filter(sub => sub.is_active !== false).length;
+  }
+
+  get activeAmenities(): number {
+    return this.amenities.filter(amenity => amenity.is_active !== false).length;
+  }
+
+  get filteredAmenities(): Amenity[] {
+    const term = this.amenitySearch.trim().toLowerCase();
+    return this.amenities.filter(amenity => {
+      if (!term) return true;
+      return amenity.name.toLowerCase().includes(term) ||
+        (amenity.description || '').toLowerCase().includes(term) ||
+        (amenity.icon || '').toLowerCase().includes(term);
+    });
   }
 
   saveTag(): void {
@@ -850,6 +970,50 @@ export class TaxonomyComponent implements OnInit {
 
   private defaultSubcategory(): Partial<SubCategoryOption> {
     return { name: '', category: undefined, description: '', priority: 0, is_active: true };
+  }
+
+  private defaultAmenity(): Partial<Amenity> {
+    return { name: '', description: '', icon: '', priority: 0, is_active: true };
+  }
+
+  saveAmenity(): void {
+    if (!this.amenityDraft.name || !this.amenityDraft.name.trim()) return;
+    this.amenitySaving = true;
+    const payload = { ...this.amenityDraft };
+    const request = this.editingAmenityId
+      ? this.propertyService.updateAmenity(this.editingAmenityId, payload)
+      : this.propertyService.createAmenity(payload);
+
+    request.subscribe({
+      next: () => {
+        this.toastr.success(`Amenity ${this.editingAmenityId ? 'updated' : 'created'} successfully`);
+        this.resetAmenityForm();
+        this.loadAmenities();
+      },
+      error: (error) => this.toastr.error(this.extractErrorMessage(error) || 'Failed to save amenity'),
+      complete: () => this.amenitySaving = false
+    });
+  }
+
+  editAmenity(amenity: Amenity): void {
+    this.editingAmenityId = amenity.id;
+    this.amenityDraft = { ...amenity };
+  }
+
+  deleteAmenity(amenity: Amenity): void {
+    if (!confirm(`Delete amenity "${amenity.name}"?`)) return;
+    this.propertyService.deleteAmenity(amenity.id).subscribe({
+      next: () => {
+        this.toastr.success('Amenity deleted');
+        this.loadAmenities();
+      },
+      error: () => this.toastr.error('Failed to delete amenity')
+    });
+  }
+
+  resetAmenityForm(): void {
+    this.amenityDraft = this.defaultAmenity();
+    this.editingAmenityId = null;
   }
 
   private extractErrorMessage(error: any): string | null {

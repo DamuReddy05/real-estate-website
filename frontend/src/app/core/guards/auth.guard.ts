@@ -8,7 +8,9 @@ export const authGuard = () => {
 
   if (authService.isAuthenticated()) {
     const user = authService.getCurrentUserValue();
-    if (user?.is_admin || user?.role === 'admin') {
+    // Only allow users with is_admin=true (not just role='admin')
+    // This ensures Auth0 customers cannot access admin routes
+    if (user?.is_admin === true) {
       return true;
     }
   }

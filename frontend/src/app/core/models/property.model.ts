@@ -92,6 +92,7 @@ export interface Amenity {
   slug: string;
   description?: string;
   icon?: string;
+  priority?: number;
   is_active?: boolean;
 }
 
@@ -129,8 +130,13 @@ export interface PropertyEnquiry {
   property_primary_image?: string | null;
   status: 'new' | 'contacted' | 'scheduled' | 'closed';
   message: string;
+  name: string;
+  email: string;
+  phone: string;
+  user?: number;
   created_at: string;
   updated_at: string;
+  enquiry_type?: 'contact_message' | 'property_enquiry';
 }
 
 export interface CreatePropertyEnquiryRequest {
@@ -187,4 +193,23 @@ export interface CategoryOption {
   priority: number;
   is_active: boolean;
   subcategories?: SubCategoryOption[];
+}
+
+export interface Banner {
+  id: number;
+  name: string;
+  banner_type: 'main_banner' | 'buy_banner' | 'rent_banner';
+  image?: string;
+  image_url?: string;
+  image_source?: string;
+  link_url?: string;
+  title?: string;
+  description?: string;
+  is_active: boolean;
+  priority: number;
+  start_date?: string;
+  end_date?: string;
+  created_at?: string;
+  updated_at?: string;
+  is_currently_active?: boolean;
 }

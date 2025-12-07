@@ -64,6 +64,16 @@ export class AuthCallbackComponent implements OnInit {
           if (error?.error?.code === 'phone_required') {
             this.googleAuth.storePendingToken(idToken, state);
             this.router.navigate(['/auth/phone'], { queryParams: { role: state.role } });
+          } else if (error?.error?.code === 'account_inactive' || error.status === 403) {
+            const adminContact = error?.error?.admin_contact || {};
+            let message = error?.error?.detail || 'Your account has been deactivated.';
+            if (adminContact.email || adminContact.phone) {
+              message += ` Please contact administrator:`;
+              if (adminContact.email) message += ` Email: ${adminContact.email}`;
+              if (adminContact.phone) message += ` Phone: ${adminContact.phone}`;
+            }
+            this.toastr.error(message, 'Account Deactivated', { timeOut: 8000 });
+            this.router.navigate(['/']);
           } else {
             console.error('Auth callback error', error);
             this.toastr.error(error?.error?.detail || 'Failed to sign in');

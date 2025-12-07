@@ -76,13 +76,13 @@ import { Subscription } from 'rxjs';
             <button class="btn-login" (click)="navigateToLogin()">
               <i class="fas fa-user"></i> Login
             </button>
-            <button class="btn-admin" routerLink="/admin/login">
-              <i class="fas fa-user-shield"></i> Admin
-            </button>
           </ng-container>
           <ng-template #authenticatedActions>
             <button class="btn-manage" *ngIf="currentUser?.role === 'customer'" (click)="manageProperties()">
               <i class="fas fa-briefcase"></i> Manage Properties
+            </button>
+            <button class="btn-admin" *ngIf="currentUser?.is_admin === true" routerLink="/admin/dashboard">
+              <i class="fas fa-user-shield"></i> Admin
             </button>
             <button class="btn-logout" (click)="logout()" [disabled]="isLoggingOut">
               <i class="fas fa-sign-out-alt"></i>

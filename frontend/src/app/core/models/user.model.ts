@@ -9,6 +9,7 @@ export interface User {
   role: 'admin' | 'customer';
   auth_provider?: string;
   phone_verified?: boolean;
+  is_active?: boolean;
   created_at: string;
 }
 

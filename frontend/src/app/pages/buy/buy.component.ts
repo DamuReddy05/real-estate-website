@@ -4,9 +4,10 @@ import { FormsModule } from '@angular/forms';
 import { RouterModule, Router } from '@angular/router';
 import { PropertyService } from '../../core/services/property.service';
 import { LocationService } from '../../core/services/location.service';
-import { Property, PropertyFilters } from '../../core/models/property.model';
+import { Property, PropertyFilters, Banner } from '../../core/models/property.model';
 import { HeaderComponent } from '../../shared/header/header.component';
 import { PropertyDetailComponent } from '../property-detail/property-detail.component';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-buy',
@@ -19,7 +20,9 @@ import { PropertyDetailComponent } from '../property-detail/property-detail.comp
     <!-- BUY PAGE - UNIQUE SPLIT SCREEN BANNER -->
     <header class="buy-split-banner">
       <!-- LEFT SIDE: Blue with Animated House Illustration -->
-      <div class="buy-left-visual">
+      <div class="buy-left-visual" 
+           [style.background-image]="hasBuyBanner() ? 'url(' + getBuyBannerImage() + ')' : null"
+           [class.has-banner]="hasBuyBanner()">
         <div class="animated-house-container">
           <div class="house-structure">
             <div class="roof-top"></div>
@@ -545,11 +548,36 @@ import { PropertyDetailComponent } from '../property-detail/property-detail.comp
 
     .buy-left-visual {
       background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 30%, #2563eb 70%, #3b82f6 100%);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
       position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 2rem;
+      
+      // Overlay for better content visibility when banner image is used
+      &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, rgba(30, 58, 138, 0.85) 0%, rgba(30, 64, 175, 0.85) 30%, rgba(37, 99, 235, 0.85) 70%, rgba(59, 130, 246, 0.85) 100%);
+        z-index: 0;
+      }
+      
+      &.has-banner::before {
+        background: rgba(15, 23, 42, 0.6); // Darker overlay when banner image is present
+      }
+      
+      // Ensure content is above the overlay
+      > * {
+        position: relative;
+        z-index: 1;
+      }
     }
 
     .animated-house-container {
@@ -2100,6 +2128,9 @@ export class BuyComponent implements OnInit, OnDestroy {
     totalAmount: 0
   };
 
+  // Banners
+  buyBanners: Banner[] = [];
+
   constructor(
     private propertyService: PropertyService,
     private router: Router,
@@ -2119,6 +2150,7 @@ export class BuyComponent implements OnInit, OnDestroy {
     this.loadFavorites();
     this.calculateLoan();
     this.setupScrollListener();
+    this.loadBanners();
     
     // Check if user came from home page banner
     const shouldScrollToSearch = localStorage.getItem('buyPageScrollToSearch');
@@ -2132,6 +2164,32 @@ export class BuyComponent implements OnInit, OnDestroy {
         }
       }, 300);
     }
+  }
+
+  loadBanners(): void {
+    this.propertyService.getBanners('buy_banner').subscribe({
+      next: (banners) => {
+        this.buyBanners = banners.filter(b => b.is_active).map(b => ({
+          ...b,
+          image_source: b.image_source?.startsWith('/') ? environment.apiUrl + b.image_source : b.image_source
+        }));
+      },
+      error: (error) => {
+        console.error('Error loading buy banners:', error);
+        this.buyBanners = [];
+      }
+    });
+  }
+
+  getBuyBannerImage(): string | null {
+    if (this.buyBanners.length > 0 && this.buyBanners[0].image_source) {
+      return this.buyBanners[0].image_source;
+    }
+    return null;
+  }
+
+  hasBuyBanner(): boolean {
+    return this.buyBanners.length > 0 && !!this.getBuyBannerImage();
   }
 
   ngOnDestroy() {

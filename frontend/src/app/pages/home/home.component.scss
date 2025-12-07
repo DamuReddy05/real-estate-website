@@ -8,8 +8,35 @@ section {
 
 .hero {
   background: linear-gradient(120deg, #1e40af, #6f45f3);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   color: #fff;
   padding: 4rem 0 3rem;
+  position: relative;
+  
+  // Overlay for better text readability
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(120deg, rgba(30, 64, 175, 0.85), rgba(111, 69, 243, 0.85));
+    z-index: 0;
+  }
+  
+  // Darker overlay when banner image is present (for better text contrast)
+  &.has-banner::before {
+    background: rgba(15, 23, 42, 0.55); // Semi-transparent dark overlay
+  }
+  
+  // Ensure content is above the overlay
+  .container {
+    position: relative;
+    z-index: 1;
+  }
 }
 
 .container {

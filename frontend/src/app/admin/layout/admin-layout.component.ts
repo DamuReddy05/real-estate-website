@@ -79,6 +79,16 @@ import { ToastrService } from 'ngx-toastr';
           </a>
 
           <a 
+            routerLink="/admin/amenities" 
+            routerLinkActive="active"
+            class="nav-item"
+            [title]="isSidebarCollapsed ? 'Amenities' : ''"
+          >
+            <i class="fas fa-star"></i>
+            <span *ngIf="!isSidebarCollapsed">Amenities</span>
+          </a>
+
+          <a 
             routerLink="/admin/locations" 
             routerLinkActive="active"
             class="nav-item"
@@ -96,6 +106,26 @@ import { ToastrService } from 'ngx-toastr';
           >
             <i class="fas fa-cog"></i>
             <span *ngIf="!isSidebarCollapsed">Site Settings</span>
+          </a>
+
+          <a 
+            routerLink="/admin/banners" 
+            routerLinkActive="active"
+            class="nav-item"
+            [title]="isSidebarCollapsed ? 'Banners' : ''"
+          >
+            <i class="fas fa-image"></i>
+            <span *ngIf="!isSidebarCollapsed">Banners</span>
+          </a>
+
+          <a 
+            routerLink="/admin/users" 
+            routerLinkActive="active"
+            class="nav-item"
+            [title]="isSidebarCollapsed ? 'Users' : ''"
+          >
+            <i class="fas fa-users"></i>
+            <span *ngIf="!isSidebarCollapsed">Users</span>
           </a>
 
           <div class="nav-divider" *ngIf="!isSidebarCollapsed"></div>
@@ -551,8 +581,11 @@ export class AdminLayoutComponent implements OnInit {
     if (url.includes('/properties')) return 'Properties';
     if (url.includes('/messages') || url.includes('/contact')) return 'Contact Messages';
     if (url.includes('/taxonomy')) return 'Tags & Categories';
+    if (url.includes('/amenities')) return 'Amenities Management';
     if (url.includes('/locations')) return 'Cities & Pincodes';
     if (url.includes('/settings')) return 'Site Settings';
+    if (url.includes('/banners')) return 'Banner Management';
+    if (url.includes('/users')) return 'User Management';
     return 'Admin Panel';
   }
 
@@ -564,8 +597,11 @@ export class AdminLayoutComponent implements OnInit {
     if (url.includes('/properties')) return 'fas fa-home';
     if (url.includes('/messages') || url.includes('/contact')) return 'fas fa-envelope';
     if (url.includes('/taxonomy')) return 'fas fa-tags';
+    if (url.includes('/amenities')) return 'fas fa-star';
     if (url.includes('/locations')) return 'fas fa-map-marker-alt';
     if (url.includes('/settings')) return 'fas fa-cog';
+    if (url.includes('/banners')) return 'fas fa-image';
+    if (url.includes('/users')) return 'fas fa-users';
     return 'fas fa-cog';
   }
 

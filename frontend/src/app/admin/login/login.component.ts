@@ -245,7 +245,20 @@ export class LoginComponent {
         this.loading = false;
         this.spinner.hide();
         console.error('Login error:', error);
-        this.toastr.error(error.error?.detail || 'Login failed. Please check your credentials.');
+        
+        // Handle inactive account
+        if (error.error?.code === 'account_inactive' || error.status === 403) {
+          const adminContact = error.error?.admin_contact || {};
+          let message = error.error?.detail || 'Your account has been deactivated.';
+          if (adminContact.email || adminContact.phone) {
+            message += ` Please contact administrator:`;
+            if (adminContact.email) message += ` Email: ${adminContact.email}`;
+            if (adminContact.phone) message += ` Phone: ${adminContact.phone}`;
+          }
+          this.toastr.error(message, 'Account Deactivated', { timeOut: 8000, enableHtml: true });
+        } else {
+          this.toastr.error(error.error?.detail || 'Login failed. Please check your credentials.', 'Login Failed');
+        }
       }
     });
   }
